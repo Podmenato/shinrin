@@ -1,6 +1,5 @@
-import {runAgent} from "./agent";
+import { runAgent } from "./src/agent";
 
 const args = process.argv.slice(2);
-
-const result = runAgent(args.join(" "))
+const result = await runAgent(args.join(" "));
 console.log(result);
