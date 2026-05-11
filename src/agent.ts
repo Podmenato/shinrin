@@ -1,7 +1,8 @@
-import {sendPrompt} from "./api";
+import { ModelProvider } from "./modelProvider";
 
-export async function runAgent(prompt: string): Promise<string> {
-  const response = await sendPrompt(prompt);
-
-  return response.message.content;
+export async function runAgent(
+    prompt: string,
+    provider: ModelProvider,
+): Promise<string> {
+    return provider.chat(prompt);
 }
