@@ -1,3 +1,5 @@
+import { Message } from "./contextManager";
+
 export interface ModelProvider {
-    chat: (prompt: string) => Promise<string>;
+    chat(messages: Message[]): Promise<string>;
 }
