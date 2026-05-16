@@ -1,5 +1,5 @@
 import { Ollama, Tool as OllamaTool } from "ollama";
-import { ModelProvider } from "./modelProvider";
+import { ModelProvider, ModelResponse } from "./modelProvider";
 import { Message } from "./contextManager";
 import { Tool } from "./tool";
 
@@ -29,7 +29,7 @@ export class OllamaProvider implements ModelProvider {
 
     constructor(private model: string) {}
 
-    async chat(messages: Message[], tools: Tool[]): Promise<string> {
+    async chat(messages: Message[], tools: Tool[]): Promise<ModelResponse> {
         console.log(
             "MSG:",
             JSON.stringify({
@@ -45,6 +45,12 @@ export class OllamaProvider implements ModelProvider {
         });
 
         console.log("RSP:", JSON.stringify(response));
-        return response.message.content;
+        return {
+            content: response.message.content,
+            toolCalls: response.message.tool_calls?.map((tc) => ({
+                name: tc.function.name,
+                args: tc.function.arguments,
+            })),
+        };
     }
 }
