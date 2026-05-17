@@ -30,21 +30,12 @@ export class OllamaProvider implements ModelProvider {
     constructor(private model: string) {}
 
     async chat(messages: Message[], tools: Tool[]): Promise<ModelResponse> {
-        console.log(
-            "MSG:",
-            JSON.stringify({
-                model: this.model,
-                messages,
-                tools: tools.map(toOllamaTool),
-            }),
-        );
         const response = await this.ollama.chat({
             model: this.model,
             messages,
             tools: tools.map(toOllamaTool),
         });
 
-        console.log("RSP:", JSON.stringify(response));
         return {
             content: response.message.content,
             toolCalls: response.message.tool_calls?.map((tc) => ({
