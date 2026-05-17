@@ -1,8 +1,8 @@
 import { Ollama, Tool as OllamaTool } from "ollama";
 import { ModelProvider, ModelResponse } from "./modelProvider";
-import { Message } from "./contextManager";
-import { Tool } from "./tool";
-import { logger } from "./logger";
+import { Message } from "../contextManager";
+import { Tool } from "../tools/tool";
+import { logger } from "../logger";
 
 const OLLAMA_LOCAL_URL = "http://localhost:11434";
 
@@ -31,7 +31,10 @@ export class OllamaProvider implements ModelProvider {
     constructor(private model: string) {}
 
     async chat(messages: Message[], tools: Tool[]): Promise<ModelResponse> {
-        logger.debug({ model: this.model, messageCount: messages.length }, "sending chat request");
+        logger.debug(
+            { model: this.model, messageCount: messages.length },
+            "sending chat request",
+        );
 
         const response = await this.ollama.chat({
             model: this.model,

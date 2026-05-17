@@ -1,5 +1,5 @@
-import { Message } from "./contextManager";
-import { Tool } from "./tool";
+import { Message } from "../contextManager";
+import { Tool } from "../tools/tool";
 
 export type ToolCall = {
     name: string;

@@ -1,7 +1,7 @@
 import { Agent } from "./src/agent";
-import { OllamaProvider } from "./src/ollamaProvider";
+import { OllamaProvider } from "./src/providers/ollamaProvider";
 import { ContextManager } from "./src/contextManager";
-import { CurrentTimeTool } from "./src/currentTimeTool";
+import { CurrentTimeTool } from "./src/tools/currentTimeTool";
 
 const LLAMA = "llama3.2:3b";
 const GEMMA = "gemma4:latest";

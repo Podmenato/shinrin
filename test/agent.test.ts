@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Agent } from "./agent";
-import { ContextManager } from "./contextManager";
-import { ModelProvider } from "./modelProvider";
-import { Tool } from "./tool";
+import { Agent } from "../src/agent";
+import { ContextManager } from "../src/contextManager";
+import { ModelProvider } from "../src/providers/modelProvider";
+import { Tool } from "../src/tools/tool";
 
 const mockProvider = (): ModelProvider => ({
     chat: vi.fn(),

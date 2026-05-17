@@ -1,7 +1,7 @@
-import { ModelProvider } from "./modelProvider";
+import { ModelProvider } from "./providers/modelProvider";
 import { ContextManager } from "./contextManager";
-import { CurrentTimeTool } from "./currentTimeTool";
-import { Tool } from "./tool";
+import { CurrentTimeTool } from "./tools/currentTimeTool";
+import { Tool } from "./tools/tool";
 import { logger } from "./logger";
 
 const MAX_ITERATIONS = 5;
@@ -39,13 +39,19 @@ export class Agent {
 
             if (response.toolCalls !== undefined) {
                 for (const toolCall of response?.toolCalls ?? []) {
-                    logger.info({ tool: toolCall.name, args: toolCall.args }, "tool call");
+                    logger.info(
+                        { tool: toolCall.name, args: toolCall.args },
+                        "tool call",
+                    );
                     const tool = this.tools.find(
                         (t) => t.definition.name === toolCall.name,
                     );
                     if (tool) {
                         const result = await tool.execute(toolCall.args);
-                        logger.debug({ tool: toolCall.name, result }, "tool result");
+                        logger.debug(
+                            { tool: toolCall.name, result },
+                            "tool result",
+                        );
                         this.ctx.add({
                             role: "tool",
                             content: `${toolCall.name}: ${result}`,
@@ -61,7 +67,10 @@ export class Agent {
             return response.content;
         }
 
-        logger.warn({ maxIterations: MAX_ITERATIONS }, "max iterations reached");
+        logger.warn(
+            { maxIterations: MAX_ITERATIONS },
+            "max iterations reached",
+        );
         return "Maximum iterations reached without completing task";
     }
 }
