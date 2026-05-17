@@ -1,6 +1,5 @@
 import { ModelProvider } from "./providers/modelProvider";
 import { ContextManager } from "./contextManager";
-import { CurrentTimeTool } from "./tools/currentTimeTool";
 import { Tool } from "./tools/tool";
 import { logger } from "./logger";
 
@@ -22,9 +21,8 @@ export class Agent {
     }
 
     async run(prompt: string): Promise<string> {
-        const tool = new CurrentTimeTool();
         this.ctx.add({ role: "user", content: prompt });
-        logger.info({ prompt }, "agent run started");
+        logger.info({ prompt, tools: this.tools.map((t) => t.definition.name) }, "agent run started");
 
         let iterations = 0;
 
@@ -32,9 +30,10 @@ export class Agent {
             iterations++;
             logger.debug({ iteration: iterations }, "agent iteration");
 
-            const response = await this.provider.chat(this.ctx.build(), [tool]);
+            const response = await this.provider.chat(this.ctx.build(), this.tools);
             if (response.content) {
                 this.ctx.add({ role: "assistant", content: response.content });
+                logger.debug({ content: response.content }, "model response");
             }
 
             if (response.toolCalls !== undefined) {
