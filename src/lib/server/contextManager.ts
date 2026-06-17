@@ -16,10 +16,10 @@ export type Message = {
 
 export class ContextManager {
 	private history: Message[] = [];
-	private sessionId: number;
+	private sessionId: string;
 	private systemPrompt: string;
 
-	constructor(systemPrompt: string, sessionId: number) {
+	constructor(systemPrompt: string, sessionId: string) {
 		this.systemPrompt = systemPrompt;
 		this.sessionId = sessionId;
 	}

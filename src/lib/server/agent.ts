@@ -14,9 +14,9 @@ export class Agent {
 	private provider: ModelProvider;
 	private ctx: ContextManager;
 	private tools: Tool[];
-	readonly agentId: number;
+	readonly agentId: string;
 
-	constructor(agentId: number, provider: ModelProvider, ctx: ContextManager, tools: Tool[] = []) {
+	constructor(agentId: string, provider: ModelProvider, ctx: ContextManager, tools: Tool[] = []) {
 		this.agentId = agentId;
 		this.provider = provider;
 		this.ctx = ctx;
@@ -24,7 +24,7 @@ export class Agent {
 	}
 
 	static async create(
-		agentId: number,
+		agentId: string,
 		name: string,
 		model: string,
 		modelProvider: ModelProvider
@@ -50,7 +50,7 @@ export class Agent {
 		return new Agent(agentId, modelProvider, contextManager, tools);
 	}
 
-	static async createFromSession(sessionId: number, modelProvider: ModelProvider): Promise<Agent> {
+	static async createFromSession(sessionId: string, modelProvider: ModelProvider): Promise<Agent> {
 		const session = await db.query.sessions.findFirst({
 			where: eq(sessions.id, sessionId),
 			with: { agent: { with: { agentTools: { with: { tool: true } } } } }

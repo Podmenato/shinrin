@@ -4,9 +4,9 @@ import { memories } from '../db/schema';
 
 export class SaveMemoryTool implements Tool {
 	definition: ToolDefinition;
-	private agentId: number;
+	private agentId: string;
 
-	constructor(agentId: number) {
+	constructor(agentId: string) {
 		this.agentId = agentId;
 		this.definition = {
 			name: 'save_memory',

@@ -1,17 +1,16 @@
 import { relations } from 'drizzle-orm';
 import {
-	integer,
 	jsonb,
 	pgTable,
 	primaryKey,
-	serial,
 	text,
 	timestamp,
-	unique
+	unique,
+	uuid
 } from 'drizzle-orm/pg-core';
 
 export const agents = pgTable('agents', {
-	id: serial().primaryKey(),
+	id: uuid().primaryKey().defaultRandom(),
 	name: text().notNull().unique(),
 	systemPrompt: text('system_prompt'),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -19,7 +18,7 @@ export const agents = pgTable('agents', {
 });
 
 export const tools = pgTable('tools', {
-	id: serial().primaryKey(),
+	id: uuid().primaryKey().defaultRandom(),
 	name: text().notNull().unique(),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
 	updatedAt: timestamp('updated_at').defaultNow().notNull()
@@ -28,10 +27,10 @@ export const tools = pgTable('tools', {
 export const agentTools = pgTable(
 	'agent_tools',
 	{
-		agentId: integer('agent_id')
+		agentId: uuid('agent_id')
 			.notNull()
 			.references(() => agents.id),
-		toolId: integer('tool_id')
+		toolId: uuid('tool_id')
 			.notNull()
 			.references(() => tools.id)
 	},
@@ -39,8 +38,8 @@ export const agentTools = pgTable(
 );
 
 export const sessions = pgTable('sessions', {
-	id: serial().primaryKey(),
-	agentId: integer('agent_id')
+	id: uuid().primaryKey().defaultRandom(),
+	agentId: uuid('agent_id')
 		.notNull()
 		.references(() => agents.id),
 	name: text().notNull(),
@@ -50,8 +49,8 @@ export const sessions = pgTable('sessions', {
 });
 
 export const messages = pgTable('messages', {
-	id: serial().primaryKey(),
-	sessionId: integer('session_id')
+	id: uuid().primaryKey().defaultRandom(),
+	sessionId: uuid('session_id')
 		.notNull()
 		.references(() => sessions.id),
 	role: text('role').notNull(),
@@ -61,11 +60,11 @@ export const messages = pgTable('messages', {
 });
 
 export const messageToolCalls = pgTable('message_tool_calls', {
-	id: serial().primaryKey(),
-	messageId: integer('message_id')
+	id: uuid().primaryKey().defaultRandom(),
+	messageId: uuid('message_id')
 		.notNull()
 		.references(() => messages.id),
-	toolId: integer('tool_id')
+	toolId: uuid('tool_id')
 		.notNull()
 		.references(() => tools.id),
 	args: jsonb('args')
@@ -74,8 +73,8 @@ export const messageToolCalls = pgTable('message_tool_calls', {
 export const memories = pgTable(
 	'memories',
 	{
-		id: serial().primaryKey(),
-		agentId: integer('agent_id')
+		id: uuid().primaryKey().defaultRandom(),
+		agentId: uuid('agent_id')
 			.notNull()
 			.references(() => agents.id),
 		key: text('key').notNull(),

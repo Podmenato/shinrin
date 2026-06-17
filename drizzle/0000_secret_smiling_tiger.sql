@@ -1,11 +1,11 @@
 CREATE TABLE "agent_tools" (
-	"agent_id" integer NOT NULL,
-	"tool_id" integer NOT NULL,
+	"agent_id" uuid NOT NULL,
+	"tool_id" uuid NOT NULL,
 	CONSTRAINT "agent_tools_agent_id_tool_id_pk" PRIMARY KEY("agent_id","tool_id")
 );
 --> statement-breakpoint
 CREATE TABLE "agents" (
-	"id" serial PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"system_prompt" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
@@ -14,8 +14,8 @@ CREATE TABLE "agents" (
 );
 --> statement-breakpoint
 CREATE TABLE "memories" (
-	"id" serial PRIMARY KEY NOT NULL,
-	"agent_id" integer NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"agent_id" uuid NOT NULL,
 	"key" text NOT NULL,
 	"value" text NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
@@ -24,15 +24,15 @@ CREATE TABLE "memories" (
 );
 --> statement-breakpoint
 CREATE TABLE "message_tool_calls" (
-	"id" serial PRIMARY KEY NOT NULL,
-	"message_id" integer NOT NULL,
-	"tool_id" integer NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"message_id" uuid NOT NULL,
+	"tool_id" uuid NOT NULL,
 	"args" jsonb
 );
 --> statement-breakpoint
 CREATE TABLE "messages" (
-	"id" serial PRIMARY KEY NOT NULL,
-	"session_id" integer NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"session_id" uuid NOT NULL,
 	"role" text NOT NULL,
 	"content" text NOT NULL,
 	"tool_name" text,
@@ -40,8 +40,8 @@ CREATE TABLE "messages" (
 );
 --> statement-breakpoint
 CREATE TABLE "sessions" (
-	"id" serial PRIMARY KEY NOT NULL,
-	"agent_id" integer NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"agent_id" uuid NOT NULL,
 	"name" text NOT NULL,
 	"model" text NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE "sessions" (
 );
 --> statement-breakpoint
 CREATE TABLE "tools" (
-	"id" serial PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,

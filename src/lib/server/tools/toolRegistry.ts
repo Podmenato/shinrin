@@ -10,7 +10,7 @@ import { CardsInfoTool } from './anki/cardsInfoTool';
 import { GetIntervalsTool } from './anki/getIntervalsTool';
 import { SaveMemoryTool } from './saveMemoryTool';
 
-export type ToolContext = { agentId: number };
+export type ToolContext = { agentId: string };
 
 const registry: Record<string, Tool> = {
 	current_time_tool: new CurrentTimeTool(),
