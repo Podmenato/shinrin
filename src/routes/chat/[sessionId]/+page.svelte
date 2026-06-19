@@ -2,6 +2,7 @@
     import {runAgent} from '$lib/sessions.remote';
     import type {PageData} from './$types';
     import {resolve} from '$app/paths';
+    import {renderMarkdown} from '$lib/markdown';
 
     type Message = PageData['messages'][0];
 
@@ -81,9 +82,9 @@
                 {:else if message.role === 'assistant'}
                     <div class="flex justify-start">
                         <div
-                                class="max-w-[75%] rounded-2xl rounded-tl-sm bg-gray-800 px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap"
+                                class="prose prose-sm prose-invert max-w-[75%] rounded-2xl rounded-tl-sm bg-gray-800 px-4 py-3 leading-relaxed prose-p:my-2 prose-pre:bg-gray-950 prose-table:text-xs prose-th:border prose-th:border-gray-700 prose-td:border prose-td:border-gray-700"
                         >
-                            {message.content}
+                            {@html renderMarkdown(message.content)}
                         </div>
                     </div>
                 {:else if message.role === 'tool'}
