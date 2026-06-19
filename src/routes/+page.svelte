@@ -1,14 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { getAgents, getAgentSessions, createSession } from '$lib/agents.remote';
+	import { getAgents, getAllSessions, createSession } from '$lib/agents.remote';
 	import { getModels } from '$lib/models.remote';
 
 	type Agent = Awaited<ReturnType<typeof getAgents>>[0];
-	type Session = Awaited<ReturnType<typeof getAgentSessions>>[0];
 
 	let selectedAgent = $state<Agent | null>(null);
-	let sessionsPromise = $state<Promise<Session[]> | null>(null);
 	let modelsPromise = $state<Promise<string[]> | null>(null);
 	let showNewSession = $state(false);
 	let newSessionName = $state('');
@@ -16,10 +14,9 @@
 	let creating = $state(false);
 
 	function selectAgent(agent: Agent) {
-		selectedAgent = agent;
+		selectedAgent = selectedAgent?.id === agent.id ? null : agent;
 		showNewSession = false;
-		sessionsPromise = getAgentSessions(agent.id);
-		modelsPromise = getModels();
+		modelsPromise = selectedAgent ? getModels() : null;
 	}
 
 	async function handleCreateSession() {
@@ -60,22 +57,21 @@
 		</section>
 
 		<!-- Sessions -->
-		{#if selectedAgent && sessionsPromise && modelsPromise}
-			<section>
-				<div class="mb-4 flex items-center justify-between">
-					<h2 class="text-xs font-semibold uppercase tracking-widest text-gray-500">
-						Sessions — {selectedAgent.name}
-					</h2>
-					<button
-						onclick={() => (showNewSession = !showNewSession)}
-						class="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
-					>
-						New session
-					</button>
-				</div>
+		<section>
+			<div class="mb-4 flex items-center justify-between">
+				<h2 class="text-xs font-semibold uppercase tracking-widest text-gray-500">Sessions</h2>
+				<button
+					onclick={() => (showNewSession = !showNewSession)}
+					disabled={!selectedAgent}
+					title={selectedAgent ? '' : 'Select an agent first'}
+					class="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+				>
+					New session
+				</button>
+			</div>
 
-				<!-- New session form -->
-				{#if showNewSession}
+			<!-- New session form -->
+			{#if showNewSession && selectedAgent && modelsPromise}
 					<div class="mb-4 rounded-xl border border-gray-700 bg-gray-900 p-5">
 						<div class="mb-3">
 							<label class="mb-1 block text-sm text-gray-400" for="session-name">Name</label>
@@ -108,19 +104,18 @@
 					</div>
 				{/if}
 
-				<!-- Session list -->
-				{#each await sessionsPromise as session (session.id)}
-					<a
-						href={resolve(`/chat/${session.id}`)}
-						class="mb-2 flex items-center justify-between rounded-xl border border-gray-800 bg-gray-900 px-5 py-4 hover:border-gray-600 hover:text-white"
-					>
-						<span class="font-medium">{session.name}</span>
-						<span class="text-sm text-gray-500">{session.model}</span>
-					</a>
-				{:else}
-					<p class="text-sm text-gray-500">No sessions yet.</p>
-				{/each}
-			</section>
-		{/if}
+			<!-- Session list -->
+			{#each await getAllSessions() as session (session.id)}
+				<a
+					href={resolve(`/chat/${session.id}`)}
+					class="mb-2 flex items-center justify-between rounded-xl border border-gray-800 bg-gray-900 px-5 py-4 hover:border-gray-600 hover:text-white"
+				>
+					<span class="font-medium">{session.name}</span>
+					<span class="text-sm text-gray-500">{session.agentName} · {session.model}</span>
+				</a>
+			{:else}
+				<p class="text-sm text-gray-500">No sessions yet.</p>
+			{/each}
+		</section>
 	</div>
 </div>

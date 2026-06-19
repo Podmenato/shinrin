@@ -17,6 +17,21 @@ export const getAgentSessions = query(v.pipe(v.string(), v.uuid()), async (agent
 	return db.select().from(sessions).where(eq(sessions.agentId, agentId));
 });
 
+/** Returns all sessions across all agents, including the agent name. */
+export const getAllSessions = query(async () => {
+	return db
+		.select({
+			id: sessions.id,
+			name: sessions.name,
+			model: sessions.model,
+			agentId: sessions.agentId,
+			agentName: agents.name,
+			createdAt: sessions.createdAt
+		})
+		.from(sessions)
+		.innerJoin(agents, eq(sessions.agentId, agents.id));
+});
+
 /** Creates a new session for the given agent. */
 export const createSession = command(
 	v.pick(insertSessionSchema, ['agentId', 'name', 'model']),
