@@ -8,6 +8,13 @@
       "when": 1781722682463,
       "tag": "0000_secret_smiling_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782064057480,
+      "tag": "0001_curly_richard_fisk",
+      "breakpoints": true
     }
   ]
 }

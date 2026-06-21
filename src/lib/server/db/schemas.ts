@@ -1,5 +1,5 @@
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-valibot';
-import { agents, sessions, messages, memories, tools } from './schema';
+import { agents, sessions, messages, memories, memoryCategories, tools } from './schema';
 import * as v from 'valibot';
 
 const uuid = v.pipe(v.string(), v.uuid());
@@ -13,7 +13,17 @@ export const selectSessionSchema = createSelectSchema(sessions, { id: uuid, agen
 export const insertMessageSchema = createInsertSchema(messages, { id: uuid, sessionId: uuid });
 export const selectMessageSchema = createSelectSchema(messages, { id: uuid, sessionId: uuid });
 
-export const insertMemorySchema = createInsertSchema(memories, { id: uuid, agentId: uuid });
-export const updateMemorySchema = createUpdateSchema(memories, { id: uuid, agentId: uuid });
+export const insertMemorySchema = createInsertSchema(memories, {
+	id: uuid,
+	agentId: uuid,
+	categoryId: uuid
+});
+export const updateMemorySchema = createUpdateSchema(memories, {
+	id: uuid,
+	agentId: uuid,
+	categoryId: uuid
+});
+
+export const insertMemoryCategorySchema = createInsertSchema(memoryCategories, { id: uuid });
 
 export const insertToolSchema = createInsertSchema(tools, { id: uuid });

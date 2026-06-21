@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
-import { agentTools, agents, tools } from './schema';
+import { agentTools, agents, memoryCategories, tools } from './schema';
 
 const client = postgres(process.env.DATABASE_URL!);
 const db = drizzle(client, { schema });
@@ -54,6 +54,11 @@ await db
 		{ name: 'Japanese', systemPrompt: JAPANESE_SYSTEM_PROMPT },
 		{ name: 'Mandarin', systemPrompt: MANDARIN_SYSTEM_PROMPT }
 	])
+	.onConflictDoNothing();
+
+await db
+	.insert(memoryCategories)
+	.values([{ name: 'profile' }, { name: 'preference' }, { name: 'progress' }, { name: 'mistake' }])
 	.onConflictDoNothing();
 
 await db

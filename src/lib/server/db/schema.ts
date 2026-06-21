@@ -70,6 +70,12 @@ export const messageToolCalls = pgTable('message_tool_calls', {
 	args: jsonb('args')
 });
 
+export const memoryCategories = pgTable('memory_categories', {
+	id: uuid().primaryKey().defaultRandom(),
+	name: text().notNull().unique(),
+	createdAt: timestamp('created_at').defaultNow().notNull()
+});
+
 export const memories = pgTable(
 	'memories',
 	{
@@ -77,8 +83,12 @@ export const memories = pgTable(
 		agentId: uuid('agent_id')
 			.notNull()
 			.references(() => agents.id),
+		categoryId: uuid('category_id')
+			.notNull()
+			.references(() => memoryCategories.id),
 		key: text('key').notNull(),
 		value: text('value').notNull(),
+		deletedAt: timestamp('deleted_at'),
 		createdAt: timestamp('created_at').defaultNow().notNull(),
 		updatedAt: timestamp('updated_at').defaultNow().notNull()
 	},
@@ -114,6 +124,14 @@ export const messageToolCallsRelations = relations(messageToolCalls, ({ one }) =
 	tool: one(tools, { fields: [messageToolCalls.toolId], references: [tools.id] })
 }));
 
+export const memoryCategoriesRelations = relations(memoryCategories, ({ many }) => ({
+	memories: many(memories)
+}));
+
 export const memoriesRelations = relations(memories, ({ one }) => ({
-	agent: one(agents, { fields: [memories.agentId], references: [agents.id] })
+	agent: one(agents, { fields: [memories.agentId], references: [agents.id] }),
+	category: one(memoryCategories, {
+		fields: [memories.categoryId],
+		references: [memoryCategories.id]
+	})
 }));
