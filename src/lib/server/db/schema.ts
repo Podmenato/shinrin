@@ -1,13 +1,5 @@
 import { relations } from 'drizzle-orm';
-import {
-	jsonb,
-	pgTable,
-	primaryKey,
-	text,
-	timestamp,
-	unique,
-	uuid
-} from 'drizzle-orm/pg-core';
+import { jsonb, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 
 export const agents = pgTable('agents', {
 	id: uuid().primaryKey().defaultRandom(),
@@ -70,12 +62,6 @@ export const messageToolCalls = pgTable('message_tool_calls', {
 	args: jsonb('args')
 });
 
-export const memoryCategories = pgTable('memory_categories', {
-	id: uuid().primaryKey().defaultRandom(),
-	name: text().notNull().unique(),
-	createdAt: timestamp('created_at').defaultNow().notNull()
-});
-
 export const memories = pgTable(
 	'memories',
 	{
@@ -83,9 +69,6 @@ export const memories = pgTable(
 		agentId: uuid('agent_id')
 			.notNull()
 			.references(() => agents.id),
-		categoryId: uuid('category_id')
-			.notNull()
-			.references(() => memoryCategories.id),
 		key: text('key').notNull(),
 		value: text('value').notNull(),
 		deletedAt: timestamp('deleted_at'),
@@ -94,6 +77,31 @@ export const memories = pgTable(
 	},
 	(t) => [unique().on(t.agentId, t.key)]
 );
+
+export const studyTopics = pgTable(
+	'study_topics',
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		agentId: uuid('agent_id')
+			.notNull()
+			.references(() => agents.id),
+		topic: text('topic').notNull(),
+		status: text('status').notNull(),
+		notes: text('notes'),
+		createdAt: timestamp('created_at').defaultNow().notNull(),
+		updatedAt: timestamp('updated_at').defaultNow().notNull()
+	},
+	(t) => [unique().on(t.agentId, t.topic)]
+);
+
+export const mistakeObservations = pgTable('mistake_observations', {
+	id: uuid().primaryKey().defaultRandom(),
+	agentId: uuid('agent_id')
+		.notNull()
+		.references(() => agents.id),
+	note: text('note').notNull(),
+	createdAt: timestamp('created_at').defaultNow().notNull()
+});
 
 export const agentsRelations = relations(agents, ({ many }) => ({
 	agentTools: many(agentTools),
@@ -124,14 +132,14 @@ export const messageToolCallsRelations = relations(messageToolCalls, ({ one }) =
 	tool: one(tools, { fields: [messageToolCalls.toolId], references: [tools.id] })
 }));
 
-export const memoryCategoriesRelations = relations(memoryCategories, ({ many }) => ({
-	memories: many(memories)
+export const memoriesRelations = relations(memories, ({ one }) => ({
+	agent: one(agents, { fields: [memories.agentId], references: [agents.id] })
 }));
 
-export const memoriesRelations = relations(memories, ({ one }) => ({
-	agent: one(agents, { fields: [memories.agentId], references: [agents.id] }),
-	category: one(memoryCategories, {
-		fields: [memories.categoryId],
-		references: [memoryCategories.id]
-	})
+export const studyTopicsRelations = relations(studyTopics, ({ one }) => ({
+	agent: one(agents, { fields: [studyTopics.agentId], references: [agents.id] })
+}));
+
+export const mistakeObservationsRelations = relations(mistakeObservations, ({ one }) => ({
+	agent: one(agents, { fields: [mistakeObservations.agentId], references: [agents.id] })
 }));

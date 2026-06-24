@@ -11,14 +11,13 @@ export class SaveMemoryTool implements Tool {
 		this.definition = {
 			name: 'save_memory',
 			description:
-				'Persist a piece of information about the user under a short key. Use this to remember facts across sessions — learning progress, recurring errors, preferences, or anything worth recalling next time. Overwrites any existing value for the same key.',
+				'Persist a piece of information about the user under a short key. Use this to remember stable facts and preferences across sessions. Overwrites any existing value for the same key — check the memories already listed in your context before picking a new key, and reuse an existing one if it covers the same thing.',
 			parameters: [
 				{
 					name: 'key',
 					type: 'string',
 					required: true,
-					description:
-						"Short identifier for the memory (e.g. 'grammar_focus', 'current_topic')."
+					description: "Short identifier for the memory (e.g. 'jlpt_level', 'teaching_style')."
 				},
 				{
 					name: 'value',
@@ -39,7 +38,7 @@ export class SaveMemoryTool implements Tool {
 			.values({ agentId: this.agentId, key, value })
 			.onConflictDoUpdate({
 				target: [memories.agentId, memories.key],
-				set: { value, updatedAt: new Date() }
+				set: { value, deletedAt: null, updatedAt: new Date() }
 			});
 
 		return `Memory saved: "${key}"`;
