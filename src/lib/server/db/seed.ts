@@ -1,8 +1,13 @@
-import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
 import { agentTools, agents, tools } from './schema';
+import { currentMode, loadEnv } from '../env';
+
+// Runs standalone (tsx, not Vite) — nothing has populated process.env for
+// us, so we have to load the right .env.[mode] file ourselves before
+// reading DATABASE_URL below.
+loadEnv(currentMode());
 
 const client = postgres(process.env.DATABASE_URL!);
 const db = drizzle(client, { schema });

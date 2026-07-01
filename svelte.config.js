@@ -17,7 +17,12 @@ const config = {
 		typescript: {
 			config: (config) => ({
 				...config,
-				include: [...config.include, '../drizzle.config.ts']
+				include: [
+					...config.include,
+					'../drizzle.config.ts',
+					'../drizzle.config.prod.ts',
+					'../scripts/**/*.ts'
+				]
 			})
 		}
 	}
