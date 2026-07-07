@@ -24,6 +24,9 @@ const config = {
 					'../scripts/**/*.ts'
 				]
 			})
+		},
+		alias: {
+			'@/*': './path/to/lib/*'
 		}
 	}
 };
