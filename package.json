@@ -32,6 +32,7 @@
 		"dotenv": "^17.4.2",
 		"drizzle-valibot": "^0.4.2",
 		"ky": "^2.0.2",
+		"mode-watcher": "^1.1.0",
 		"ollama": "^0.6.3",
 		"pino": "^10.3.1",
 		"valibot": "^1.4.1"

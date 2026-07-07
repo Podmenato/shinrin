@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { mode, toggleMode } from 'mode-watcher';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import HouseIcon from '@lucide/svelte/icons/house';
+	import SunIcon from '@lucide/svelte/icons/sun';
+	import MoonIcon from '@lucide/svelte/icons/moon';
 
 	const items = [{ title: 'Home', href: resolve('/'), icon: HouseIcon }];
 </script>
@@ -29,4 +32,19 @@
 			</Sidebar.Menu>
 		</Sidebar.Group>
 	</Sidebar.Content>
+	<Sidebar.Footer>
+		<Sidebar.Menu>
+			<Sidebar.MenuItem>
+				<Sidebar.MenuButton onclick={toggleMode}>
+					{#if mode.current === 'dark'}
+						<SunIcon />
+						<span>Light mode</span>
+					{:else}
+						<MoonIcon />
+						<span>Dark mode</span>
+					{/if}
+				</Sidebar.MenuButton>
+			</Sidebar.MenuItem>
+		</Sidebar.Menu>
+	</Sidebar.Footer>
 </Sidebar.Root>
