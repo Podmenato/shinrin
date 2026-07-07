@@ -72,6 +72,10 @@ export class Agent {
 		return new Agent(agentId, modelProvider, contextManager, tools);
 	}
 
+	async compact(): Promise<void> {
+		await this.ctx.compact(this.provider);
+	}
+
 	async run(prompt: string): Promise<string> {
 		await this.ctx.add({ role: 'user', content: prompt });
 		logger.info({ prompt, tools: this.tools.map((t) => t.definition.name) }, 'agent run started');

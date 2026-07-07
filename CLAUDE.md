@@ -41,6 +41,14 @@ progress, mistake logs).
 - `src/routes/+page.svelte` — landing page, lists sessions.
 - `src/routes/chat/[sessionId]/` — chat UI for a session.
 - `src/routes/demo/` — scaffold demo pages from `sv create`, not part of the app.
+- Data fetching uses SvelteKit's **remote functions** (`query`/`command` from
+  `$app/server`, in `src/lib/*.remote.ts` — e.g.
+  [agents.remote.ts](src/lib/agents.remote.ts),
+  [sessions.remote.ts](src/lib/sessions.remote.ts)), called directly from
+  `.svelte` files (`{#each await getAgents() as ...}`), **not** the
+  traditional `+page.server.ts` `load` function. `kit.experimental.remoteFunctions`
+  is enabled in [svelte.config.js](svelte.config.js) for this. Don't add a
+  `load` function out of habit — check for a `.remote.ts` file first.
 
 ## Dev commands (use pnpm)
 

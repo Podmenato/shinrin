@@ -1,5 +1,14 @@
 import { relations } from 'drizzle-orm';
-import { jsonb, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import {
+	type AnyPgColumn,
+	jsonb,
+	pgTable,
+	primaryKey,
+	text,
+	timestamp,
+	unique,
+	uuid
+} from 'drizzle-orm/pg-core';
 
 export const agents = pgTable('agents', {
 	id: uuid().primaryKey().defaultRandom(),
@@ -36,6 +45,10 @@ export const sessions = pgTable('sessions', {
 		.references(() => agents.id),
 	name: text().notNull(),
 	model: text().notNull(),
+	summary: text('summary'),
+	summarizedThroughMessageId: uuid('summarized_through_message_id').references(
+		(): AnyPgColumn => messages.id
+	),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
 	updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
