@@ -4,10 +4,12 @@
 	import { mode, toggleMode } from 'mode-watcher';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import HouseIcon from '@lucide/svelte/icons/house';
+	import ServerIcon from '@lucide/svelte/icons/server';
 	import SunIcon from '@lucide/svelte/icons/sun';
 	import MoonIcon from '@lucide/svelte/icons/moon';
 
 	const items = [{ title: 'Home', href: resolve('/'), icon: HouseIcon }];
+	const footerItems = [{ title: 'Ollama Settings', href: resolve('/ollama'), icon: ServerIcon }];
 </script>
 
 <Sidebar.Root>
@@ -34,6 +36,18 @@
 	</Sidebar.Content>
 	<Sidebar.Footer>
 		<Sidebar.Menu>
+			{#each footerItems as item (item.href)}
+				<Sidebar.MenuItem>
+					<Sidebar.MenuButton isActive={page.url.pathname === item.href}>
+						{#snippet child({ props })}
+							<a href={item.href} {...props}>
+								<item.icon />
+								<span>{item.title}</span>
+							</a>
+						{/snippet}
+					</Sidebar.MenuButton>
+				</Sidebar.MenuItem>
+			{/each}
 			<Sidebar.MenuItem>
 				<Sidebar.MenuButton onclick={toggleMode}>
 					{#if mode.current === 'dark'}
