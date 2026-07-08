@@ -38,9 +38,21 @@ progress, mistake logs).
 
 ## Routes
 
-- `src/routes/+page.svelte` — landing page, lists sessions.
-- `src/routes/chat/[sessionId]/` — chat UI for a session.
-- `src/routes/demo/` — scaffold demo pages from `sv create`, not part of the app.
+- `src/routes/+page.svelte` — landing page; currently a placeholder
+  ("Hello, Shinrin") pending a real dashboard.
+- `src/routes/+layout.svelte` — wraps every route in the shadcn-svelte
+  sidebar shell (`Sidebar.Provider` / `Sidebar.Inset`) and mounts
+  `ModeWatcher` (see UI section below).
+- [src/lib/components/app-sidebar.svelte](src/lib/components/app-sidebar.svelte) —
+  sidebar nav content (menu items, dark-mode toggle button). Add new nav
+  items here.
+- The chat UI (previously `src/routes/chat/[sessionId]/`) was torn down and
+  is pending a rebuild on the shadcn-svelte base; the remote functions it
+  used ([sessions.remote.ts](src/lib/sessions.remote.ts),
+  [agents.remote.ts](src/lib/agents.remote.ts),
+  [models.remote.ts](src/lib/models.remote.ts)) and
+  [markdown.ts](src/lib/markdown.ts) are unused right now but left intact
+  for that rebuild.
 - Data fetching uses SvelteKit's **remote functions** (`query`/`command` from
   `$app/server`, in `src/lib/*.remote.ts` — e.g.
   [agents.remote.ts](src/lib/agents.remote.ts),
@@ -49,6 +61,28 @@ progress, mistake logs).
   traditional `+page.server.ts` `load` function. `kit.experimental.remoteFunctions`
   is enabled in [svelte.config.js](svelte.config.js) for this. Don't add a
   `load` function out of habit — check for a `.remote.ts` file first.
+
+## UI / components
+
+- Component library is **shadcn-svelte** (built on `bits-ui`). Installed
+  components live in `src/lib/components/ui/*` (e.g. `button`, `card`,
+  `sidebar`, `select`, `field`, `empty`, `spinner`, ...). When a screen
+  needs a component that isn't there yet, prefer pulling it from
+  shadcn-svelte (`pnpm dlx shadcn-svelte@latest add <name>` — check
+  https://www.shadcn-svelte.com/docs/components for the current name/list
+  rather than guessing) over hand-rolling markup.
+- Theme colors are CSS custom properties in
+  [src/routes/layout.css](src/routes/layout.css) (OKLCH, `:root` + `.dark`)
+  — a custom "forest" green palette, not shadcn's default neutral one.
+  Config metadata (base color, style, aliases) is in
+  [components.json](components.json).
+- Dark mode uses the `mode-watcher` package, not hand-rolled state:
+  `<ModeWatcher />` is mounted once in `+layout.svelte` (handles the
+  pre-hydration class script + `localStorage` persistence); `toggleMode()` /
+  `mode.current` from `mode-watcher` are used elsewhere (see
+  [app-sidebar.svelte](src/lib/components/app-sidebar.svelte)).
+- Icons are `@lucide/svelte`, imported per-icon, e.g.
+  `import HouseIcon from '@lucide/svelte/icons/house'`.
 
 ## Dev commands (use pnpm)
 
