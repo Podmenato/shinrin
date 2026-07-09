@@ -61,6 +61,45 @@ progress, mistake logs).
   traditional `+page.server.ts` `load` function. `kit.experimental.remoteFunctions`
   is enabled in [svelte.config.js](svelte.config.js) for this. Don't add a
   `load` function out of habit — check for a `.remote.ts` file first.
+- `src/routes/ollama/` — Ollama admin page (downloaded/running models, stop a
+  running model). Talks to the local Ollama daemon directly via
+  [src/lib/server/ollamaAdmin.ts](src/lib/server/ollamaAdmin.ts) — intentionally
+  not routed through `ModelProvider`, since it's inherently Ollama-specific
+  admin/management, not a chat-provider concern. See "Remote functions" below
+  for the `query.live` pattern this page uses.
+
+## Remote functions
+
+- Regular `query()`/`command()` (see above) expose `.refresh()`. `query.live()`
+  is a separate, streaming variant: it takes an async generator function, and the
+  connection it opens server-side only stays alive while a client is actively
+  subscribed (closes on navigation/tab close — no orphaned polling). Client-side
+  it exposes `.connected` / `.done` / `.reconnect()` instead — there is no
+  `.refresh()` on a live query.
+- First (and so far only) usage:
+  [src/lib/ollamaAdmin.remote.ts](src/lib/ollamaAdmin.remote.ts) streams Ollama's
+  models (via [src/lib/server/ollamaAdmin.ts](src/lib/server/ollamaAdmin.ts)),
+  polling every 5s server-side for as long as `src/routes/ollama/` has a client
+  connected.
+- **`query.live` SSR gotcha**: if the generator's *first* `yield` requires real
+  async I/O (e.g. `yield await someFetch()`), there's a race between that promise
+  resolving and SvelteKit serializing the SSR response. Losing that race throws
+  `hydratable_missing_but_required` during hydration — **in dev mode this is a
+  hard error that aborts hydration for the whole page**, not just the affected
+  component (in production it's just a console warning + graceful fallback).
+  Fix: `yield` a synchronous placeholder first (e.g. `yield null;`) before the
+  `while (true)` polling loop, so the hydration snapshot always resolves
+  instantly and never loses the race. In the UI, distinguish "not loaded yet"
+  (`null`) from "genuinely empty" (real `[]`) with an explicit `== null` check —
+  don't use `?? []`/truthiness, or the two states get conflated.
+- Any `query()`/`query.live()` call is cached by function id + serialized args —
+  calling the same remote function from multiple components (e.g. a page and a
+  child component) shares the same underlying reactive resource automatically.
+  Prefer calling the query directly wherever it's needed over prop-drilling it.
+- Don't pass a query's method as a bare prop (`refresh={models.refresh}`) — it's
+  a real class instance method and loses its `this` binding when detached like
+  that. Wrap it (`refresh={() => models.refresh()}`) or otherwise always call it
+  as a method, never as a bare reference.
 
 ## UI / components
 

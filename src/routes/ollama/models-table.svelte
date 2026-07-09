@@ -5,6 +5,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Spinner } from '$lib/components/ui/spinner/index.js';
+	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import ServerIcon from '@lucide/svelte/icons/server';
 
 	const models = getModels();
@@ -37,7 +38,7 @@
 
 	async function handleStop(model: string) {
 		await stopRunningModel(model);
-		await models.refresh();
+		await models.reconnect();
 	}
 </script>
 
@@ -53,8 +54,29 @@
 			</Empty.Header>
 		</Empty.Root>
 	</div>
-{:else if !models.current}
-	<div class="flex h-full items-center justify-center"><Spinner /></div>
+{:else if models.current == null}
+	<Table.Root class="table-fixed">
+		<Table.Header>
+			<Table.Row>
+				<Table.Head class="w-36">Name</Table.Head>
+				<Table.Head class="w-24">State</Table.Head>
+				<Table.Head class="w-20">Size</Table.Head>
+				<Table.Head class="w-28">Expires</Table.Head>
+				<Table.Head class="w-36 text-right">Actions</Table.Head>
+			</Table.Row>
+		</Table.Header>
+		<Table.Body>
+			{#each { length: 4 }, i (i)}
+				<Table.Row>
+					<Table.Cell><Skeleton class="h-4 w-24" /></Table.Cell>
+					<Table.Cell><Skeleton class="h-5 w-16 rounded-full" /></Table.Cell>
+					<Table.Cell><Skeleton class="h-4 w-12" /></Table.Cell>
+					<Table.Cell><Skeleton class="h-4 w-16" /></Table.Cell>
+					<Table.Cell class="text-right"><Skeleton class="ml-auto h-8 w-16" /></Table.Cell>
+				</Table.Row>
+			{/each}
+		</Table.Body>
+	</Table.Root>
 {:else if sortedModels.length === 0}
 	<div class="flex h-full items-center justify-center">
 		<Empty.Root>
