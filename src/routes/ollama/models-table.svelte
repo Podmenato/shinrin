@@ -1,15 +1,23 @@
 <script lang="ts">
 	import { getModels, stopRunningModel } from '$lib/ollamaAdmin.remote';
 	import * as Table from '$lib/components/ui/table/index.js';
-	import * as Empty from '$lib/components/ui/empty/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Spinner } from '$lib/components/ui/spinner/index.js';
-	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import ServerIcon from '@lucide/svelte/icons/server';
 	import EmptyTable from '$lib/components/data-table/empty-table.svelte';
+	import TableHeader from '$lib/components/data-table/table-header.svelte';
+	import TableSkeletonBody from '$lib/components/data-table/table-skeleton-body.svelte';
 
 	const models = getModels();
+
+	const columns = [
+		{ width: 'w-36', name: 'Name' },
+		{ width: 'w-24', name: 'State' },
+		{ width: 'w-20', name: 'Size' },
+		{ width: 'w-28', name: 'Expires' },
+		{ width: 'w-36 text-right', name: 'Actions' }
+	];
 
 	const sortedModels = $derived(
 		(models.current ?? [])
@@ -44,55 +52,21 @@
 </script>
 
 {#if models.error}
-	<div class="flex h-full items-center justify-center">
-		<EmptyTable title="Couldn't load models" description={models.error.message} Icon={ServerIcon} />
-	</div>
+	<EmptyTable title="Couldn't load models" description={models.error.message} Icon={ServerIcon} />
 {:else if models.current == null}
 	<Table.Root class="table-fixed">
-		<Table.Header>
-			<Table.Row>
-				<Table.Head class="w-36">Name</Table.Head>
-				<Table.Head class="w-24">State</Table.Head>
-				<Table.Head class="w-20">Size</Table.Head>
-				<Table.Head class="w-28">Expires</Table.Head>
-				<Table.Head class="w-36 text-right">Actions</Table.Head>
-			</Table.Row>
-		</Table.Header>
-		<Table.Body>
-			{#each { length: 4 }, i (i)}
-				<Table.Row>
-					<Table.Cell><Skeleton class="h-4 w-24" /></Table.Cell>
-					<Table.Cell><Skeleton class="h-5 w-16 rounded-full" /></Table.Cell>
-					<Table.Cell><Skeleton class="h-4 w-12" /></Table.Cell>
-					<Table.Cell><Skeleton class="h-4 w-16" /></Table.Cell>
-					<Table.Cell class="text-right"><Skeleton class="ml-auto h-8 w-16" /></Table.Cell>
-				</Table.Row>
-			{/each}
-		</Table.Body>
+		<TableHeader {columns} />
+		<TableSkeletonBody rows={4} />
 	</Table.Root>
 {:else if sortedModels.length === 0}
-	<div class="flex h-full items-center justify-center">
-		<Empty.Root>
-			<Empty.Header>
-				<Empty.Media variant="icon">
-					<ServerIcon />
-				</Empty.Media>
-				<Empty.Title>No models downloaded</Empty.Title>
-				<Empty.Description>Pull a model with Ollama to see it here.</Empty.Description>
-			</Empty.Header>
-		</Empty.Root>
-	</div>
+	<EmptyTable
+		title="No models downloaded"
+		description="Pull a model with Ollama to see it here."
+		Icon={ServerIcon}
+	/>
 {:else}
 	<Table.Root class="table-fixed">
-		<Table.Header>
-			<Table.Row>
-				<Table.Head class="w-36">Name</Table.Head>
-				<Table.Head class="w-24">State</Table.Head>
-				<Table.Head class="w-20">Size</Table.Head>
-				<Table.Head class="w-28">Expires</Table.Head>
-				<Table.Head class="w-36 text-right">Actions</Table.Head>
-			</Table.Row>
-		</Table.Header>
+		<TableHeader {columns} />
 		<Table.Body>
 			{#each sortedModels as model (model.model)}
 				<Table.Row>
