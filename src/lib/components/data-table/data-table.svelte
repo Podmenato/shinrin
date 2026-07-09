@@ -44,32 +44,31 @@
 
 {#if error}
 	<EmptyTable title="Couldn't load data" description={error} {Icon} />
-{:else if data == null}
-	<Table.Root>
-		<TableHeader {columns} />
-		<TableSkeletonBody rows={3} />
-	</Table.Root>
-{:else if data.length === 0}
+{:else if data != null && data.length === 0}
 	<EmptyTable title={emptyTitle} description={emptyDesc} {Icon} />
 {:else}
 	<Table.Root>
 		<TableHeader {columns} />
-		<Table.Body>
-			{#each data as row (rowKey(row))}
-				<Table.Row>
-					{#each columns as column, i (i)}
-						<Table.Cell>
-							{@const value = column.cell(row)}
-							{#if typeof value === 'object'}
-								{@const Cell = value.component}
-								<Cell {...value.props} />
-							{:else}
-								{value}
-							{/if}
-						</Table.Cell>
-					{/each}
-				</Table.Row>
-			{/each}
-		</Table.Body>
+		{#if data == null}
+			<TableSkeletonBody rows={3} />
+		{:else}
+			<Table.Body>
+				{#each data as row (rowKey(row))}
+					<Table.Row>
+						{#each columns as column, i (i)}
+							<Table.Cell>
+								{@const value = column.cell(row)}
+								{#if typeof value === 'object'}
+									{@const Cell = value.component}
+									<Cell {...value.props} />
+								{:else}
+									{value}
+								{/if}
+							</Table.Cell>
+						{/each}
+					</Table.Row>
+				{/each}
+			</Table.Body>
+		{/if}
 	</Table.Root>
 {/if}
