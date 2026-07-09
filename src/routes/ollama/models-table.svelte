@@ -7,6 +7,7 @@
 	import { Spinner } from '$lib/components/ui/spinner/index.js';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import ServerIcon from '@lucide/svelte/icons/server';
+	import EmptyTable from '$lib/components/data-table/empty-table.svelte';
 
 	const models = getModels();
 
@@ -44,15 +45,7 @@
 
 {#if models.error}
 	<div class="flex h-full items-center justify-center">
-		<Empty.Root>
-			<Empty.Header>
-				<Empty.Media variant="icon">
-					<ServerIcon />
-				</Empty.Media>
-				<Empty.Title>Couldn't load models</Empty.Title>
-				<Empty.Description>{models.error.message}</Empty.Description>
-			</Empty.Header>
-		</Empty.Root>
+		<EmptyTable title="Couldn't load models" description={models.error.message} Icon={ServerIcon} />
 	</div>
 {:else if models.current == null}
 	<Table.Root class="table-fixed">

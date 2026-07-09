@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { getAgents } from '$lib/agents.remote';
-	import * as Table from '$lib/components/ui/table/index.js';
-	import * as Empty from '$lib/components/ui/empty/index.js';
-	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
+	import * as Table from '$lib/components/ui/table/index';
+	import * as Empty from '$lib/components/ui/empty/index';
+	import { Skeleton } from '$lib/components/ui/skeleton/index';
 	import BotIcon from '@lucide/svelte/icons/bot';
+	import EmptyTable from '$lib/components/data-table/empty-table.svelte';
 
 	const agents = getAgents();
 
@@ -18,15 +19,7 @@
 
 {#if agents.error}
 	<div class="flex h-full items-center justify-center">
-		<Empty.Root>
-			<Empty.Header>
-				<Empty.Media variant="icon">
-					<BotIcon />
-				</Empty.Media>
-				<Empty.Title>Couldn't load agents</Empty.Title>
-				<Empty.Description>{agents.error.message}</Empty.Description>
-			</Empty.Header>
-		</Empty.Root>
+		<EmptyTable title="Couldn't load agents" description={agents.error.message} Icon={BotIcon} />
 	</div>
 {:else if agents.current == null}
 	<Table.Root class="table-fixed">
