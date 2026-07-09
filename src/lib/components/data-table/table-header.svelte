@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as Table from '$lib/components/ui/table';
 
-	type Column = { width: string; name: string };
+	type Column = { width?: string; name: string };
 
 	let { columns }: { columns: Column[] } = $props();
 </script>

@@ -1,7 +1,9 @@
 import { query, command } from '$app/server';
 import * as v from 'valibot';
 import { logger } from '$lib/server/logger';
-import { listModels, stopModel } from '$lib/server/ollamaAdmin';
+import { listModels, stopModel, type OllamaModel } from '$lib/server/ollamaAdmin';
+
+export type { OllamaModel };
 
 const POLL_INTERVAL_MS = 5_000;
 

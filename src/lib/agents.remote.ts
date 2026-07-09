@@ -2,13 +2,15 @@ import { query, command } from '$app/server';
 import { db } from '$lib/server/db';
 import { agents, sessions } from '$lib/server/db/schema';
 import { insertSessionSchema } from '$lib/server/db/schemas';
-import { eq } from 'drizzle-orm';
+import { eq, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
 
 /** Returns all agents. */
 export const getAgents = query(async () => {
 	return db.select().from(agents);
 });
+
+export type Agent = InferSelectModel<typeof agents>;
 
 /** Returns all sessions for the given agent. */
 export const getAgentSessions = query(v.pipe(v.string(), v.uuid()), async (agentId) => {

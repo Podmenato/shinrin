@@ -2,7 +2,7 @@
 	import * as Empty from '$lib/components/ui/empty';
 	import type { Component } from 'svelte';
 
-	let { title, description, Icon }: { title: string; description: string; Icon: Component } =
+	let { title, description, Icon }: { title: string; description?: string; Icon: Component } =
 		$props();
 </script>
 
@@ -13,7 +13,9 @@
 				<Icon />
 			</Empty.Media>
 			<Empty.Title>{title}</Empty.Title>
-			<Empty.Description>{description}</Empty.Description>
+			{#if description}
+				<Empty.Description>{description}</Empty.Description>
+			{/if}
 		</Empty.Header>
 	</Empty.Root>
 </div>
