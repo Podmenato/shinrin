@@ -100,6 +100,17 @@ progress, mistake logs).
   a real class instance method and loses its `this` binding when detached like
   that. Wrap it (`refresh={() => models.refresh()}`) or otherwise always call it
   as a method, never as a bare reference.
+- **`form()` submit vs result**: inside an `enhance` callback, `await instance.submit()`
+  resolves to a `boolean` (did validation succeed) — it does **not** return the server
+  function's return value. That's on the `result` getter, which is only populated once
+  `submit()` resolves. Don't destructure `{ result }` out of the callback argument up
+  front — that reads the getter before submission completes, giving a stale/`undefined`
+  value. Read `form.result` *after* `await form.submit()`.
+- A single `form()` can serve create-or-update: make `id` optional in the validation
+  schema and branch on its presence inside the handler (insert vs update). Call the
+  form directly for create, `.for(id)` for update — `.for()` only exists to key/dedupe
+  concurrent instances on the same page (e.g. a list of editable rows), it doesn't
+  change handler behavior. See `saveAgent` in [agents.remote.ts](src/lib/agents.remote.ts).
 
 ## UI / components
 
