@@ -1,16 +1,23 @@
-import { query, command } from '$app/server';
+import { query, command, form } from '$app/server';
 import { db } from '$lib/server/db';
 import { agents, sessions } from '$lib/server/db/schema';
 import { insertSessionSchema } from '$lib/server/db/schemas';
-import { eq, type InferSelectModel } from 'drizzle-orm';
+import { eq, isNull, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
 
-/** Returns all agents. */
+/** Returns all non-deleted agents. */
 export const getAgents = query(async () => {
-	return db.select().from(agents);
+	return db.select().from(agents).where(isNull(agents.deletedAt));
 });
 
 export type Agent = InferSelectModel<typeof agents>;
+
+/** Returns a single agent by id. */
+export const getAgentById = query(v.pipe(v.string(), v.uuid()), async (id) => {
+	const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });
+	if (!agent) throw new Error('Agent not found');
+	return agent;
+});
 
 /** Returns all sessions for the given agent. */
 export const getAgentSessions = query(v.pipe(v.string(), v.uuid()), async (agentId) => {
@@ -42,3 +49,33 @@ export const createSession = command(
 		return session;
 	}
 );
+
+/** Updates an agent's name and system prompt. */
+export const updateAgent = form(
+	v.object({
+		id: v.pipe(v.string(), v.uuid()),
+		name: v.pipe(v.string(), v.nonEmpty()),
+		systemPrompt: v.string()
+	}),
+	async ({ id, name, systemPrompt }) => {
+		const [agent] = await db
+			.update(agents)
+			.set({
+				name,
+				systemPrompt: systemPrompt.trim() === '' ? null : systemPrompt,
+				updatedAt: new Date()
+			})
+			.where(eq(agents.id, id))
+			.returning();
+		if (!agent) {
+			throw new Error('Agent not found');
+		}
+		await getAgents().refresh();
+		return agent;
+	}
+);
+
+/** Soft-deletes an agent; its sessions, memories, and other history are left intact. */
+export const deleteAgent = command(v.pipe(v.string(), v.uuid()), async (id) => {
+	await db.update(agents).set({ deletedAt: new Date() }).where(eq(agents.id, id));
+});

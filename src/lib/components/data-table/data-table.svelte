@@ -30,7 +30,8 @@
 		rowKey,
 		Icon,
 		emptyTitle = 'No entries yet',
-		emptyDesc
+		emptyDesc,
+		onRowClick
 	}: {
 		columns: DataTableColumn<T>[];
 		data: T[] | undefined;
@@ -39,22 +40,26 @@
 		Icon: Component;
 		emptyTitle?: string;
 		emptyDesc: string;
+		onRowClick?: (row: T) => void;
 	} = $props();
 </script>
 
 {#if error}
 	<EmptyTable title="Couldn't load data" description={error} {Icon} />
-{:else if data != null && data.length === 0}
+{:else if data !== null && data !== undefined && data.length === 0}
 	<EmptyTable title={emptyTitle} description={emptyDesc} {Icon} />
 {:else}
 	<Table.Root>
 		<TableHeader {columns} />
-		{#if data == null}
+		{#if data === undefined}
 			<TableSkeletonBody rows={3} />
 		{:else}
 			<Table.Body>
 				{#each data as row (rowKey(row))}
-					<Table.Row>
+					<Table.Row
+						class={onRowClick ? 'cursor-pointer' : undefined}
+						onclick={onRowClick ? () => onRowClick(row) : undefined}
+					>
 						{#each columns as column, i (i)}
 							<Table.Cell>
 								{@const value = column.cell(row)}

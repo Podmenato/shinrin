@@ -14,6 +14,7 @@ export const agents = pgTable('agents', {
 	id: uuid().primaryKey().defaultRandom(),
 	name: text().notNull().unique(),
 	systemPrompt: text('system_prompt'),
+	deletedAt: timestamp('deleted_at'),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
 	updatedAt: timestamp('updated_at').defaultNow().notNull()
 });

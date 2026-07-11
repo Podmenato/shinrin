@@ -64,7 +64,7 @@
 
 <DataTable
 	{columns}
-	data={models.current == null ? undefined : sortedModels}
+	data={models.current === null ? undefined : sortedModels}
 	error={models.error?.message}
 	rowKey={(model) => model.model}
 	Icon={ServerIcon}
