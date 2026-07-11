@@ -60,11 +60,19 @@ export const saveAgent = form(
 		id: v.optional(v.pipe(v.string(), v.uuid())),
 		name: v.pipe(v.string(), v.nonEmpty()),
 		systemPrompt: v.string(),
+		isSubagent: v.optional(v.boolean(), false),
+		subagentDescription: v.optional(v.string(), ''),
 		toolIds: v.optional(v.array(v.pipe(v.string(), v.uuid())), [])
 	}),
-	async ({ id, name, systemPrompt, toolIds }) => {
+	async ({ id, name, systemPrompt, isSubagent, subagentDescription, toolIds }) => {
 		const agent = await db.transaction(async (tx) => {
-			const values = { name, systemPrompt: systemPrompt.trim() === '' ? null : systemPrompt };
+			const values = {
+				name,
+				systemPrompt: systemPrompt.trim() === '' ? null : systemPrompt,
+				isSubagent,
+				subagentDescription:
+					isSubagent && subagentDescription.trim() !== '' ? subagentDescription : null
+			};
 
 			let agent;
 			if (id) {

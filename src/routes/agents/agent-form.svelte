@@ -18,6 +18,8 @@
 
 	const allTools = $derived(await getTools());
 
+	let isSubagent = $derived(agent?.isSubagent ?? false);
+
 	const agentForm = $derived(agent ? saveAgent.for(agent.id) : saveAgent);
 	const submitForm = $derived(
 		agentForm.enhance(async (form) => {
@@ -68,6 +70,23 @@
 				/>
 				<Field.Error errors={agentForm.fields.systemPrompt.issues()} />
 			</Field.Field>
+
+			<Field.Field orientation="horizontal">
+				<Checkbox id="isSubagent" name="b:isSubagent" bind:checked={isSubagent} />
+				<Field.Label for="isSubagent" class="font-normal">Allow as subagent</Field.Label>
+			</Field.Field>
+
+			{#if isSubagent}
+				<Field.Field>
+					<Field.Label for="subagentDescription">Subagent description</Field.Label>
+					<Textarea
+						id="subagentDescription"
+						placeholder="Describe what this agent does and when another agent should call it as a subagent."
+						{...agentForm.fields.subagentDescription.as('text', agent?.subagentDescription ?? '')}
+					/>
+					<Field.Error errors={agentForm.fields.subagentDescription.issues()} />
+				</Field.Field>
+			{/if}
 
 			<Field.Set>
 				<Field.Legend variant="label">Tools</Field.Legend>

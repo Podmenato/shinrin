@@ -1,6 +1,7 @@
 import { relations } from 'drizzle-orm';
 import {
 	type AnyPgColumn,
+	boolean,
 	jsonb,
 	pgTable,
 	primaryKey,
@@ -14,6 +15,8 @@ export const agents = pgTable('agents', {
 	id: uuid().primaryKey().defaultRandom(),
 	name: text().notNull().unique(),
 	systemPrompt: text('system_prompt'),
+	isSubagent: boolean('is_subagent').notNull().default(false),
+	subagentDescription: text('subagent_description'),
 	deletedAt: timestamp('deleted_at'),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
 	updatedAt: timestamp('updated_at').defaultNow().notNull()
