@@ -71,6 +71,7 @@ export const updateAgent = form(
 			throw new Error('Agent not found');
 		}
 		await getAgents().refresh();
+		await getAgentById(id).refresh();
 		return agent;
 	}
 );

@@ -4,19 +4,12 @@
 	import DataTable, { type DataTableColumn } from '$lib/components/data-table/data-table.svelte';
 	import BotIcon from '@lucide/svelte/icons/bot';
 	import { resolve } from '$app/paths';
+	import { formatDate } from '$lib/date';
 
 	const agents = getAgents();
 
 	function openAgent(agent: Agent) {
 		goto(resolve(`/agents/${agent.id}`));
-	}
-
-	function formatDate(date: Date): string {
-		return new Date(date).toLocaleDateString(undefined, {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric'
-		});
 	}
 
 	const columns: DataTableColumn<Agent>[] = [
