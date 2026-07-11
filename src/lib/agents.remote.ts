@@ -54,38 +54,44 @@ export const createSession = command(
 	}
 );
 
-/** Updates an agent's name, system prompt, and assigned tools. */
-export const updateAgent = form(
+/** Creates or updates an agent's name, system prompt, and assigned tools. */
+export const saveAgent = form(
 	v.object({
-		id: v.pipe(v.string(), v.uuid()),
+		id: v.optional(v.pipe(v.string(), v.uuid())),
 		name: v.pipe(v.string(), v.nonEmpty()),
 		systemPrompt: v.string(),
 		toolIds: v.optional(v.array(v.pipe(v.string(), v.uuid())), [])
 	}),
 	async ({ id, name, systemPrompt, toolIds }) => {
 		const agent = await db.transaction(async (tx) => {
-			const [agent] = await tx
-				.update(agents)
-				.set({
-					name,
-					systemPrompt: systemPrompt.trim() === '' ? null : systemPrompt,
-					updatedAt: new Date()
-				})
-				.where(eq(agents.id, id))
-				.returning();
-			if (!agent) {
-				throw new Error('Agent not found');
+			const values = { name, systemPrompt: systemPrompt.trim() === '' ? null : systemPrompt };
+
+			let agent;
+			if (id) {
+				[agent] = await tx
+					.update(agents)
+					.set({ ...values, updatedAt: new Date() })
+					.where(eq(agents.id, id))
+					.returning();
+				if (!agent) {
+					throw new Error('Agent not found');
+				}
+				await tx.delete(agentTools).where(eq(agentTools.agentId, id));
+			} else {
+				[agent] = await tx.insert(agents).values(values).returning();
 			}
 
-			await tx.delete(agentTools).where(eq(agentTools.agentId, id));
 			if (toolIds.length > 0) {
-				await tx.insert(agentTools).values(toolIds.map((toolId) => ({ agentId: id, toolId })));
+				await tx.insert(agentTools).values(toolIds.map((toolId) => ({ agentId: agent.id, toolId })));
 			}
 
 			return agent;
 		});
+
 		await getAgents().refresh();
-		await getAgentById(id).refresh();
+		if (id) {
+			await getAgentById(id).refresh();
+		}
 		return agent;
 	}
 );

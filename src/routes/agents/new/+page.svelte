@@ -1,13 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { getAgentById } from '$lib/agents.remote';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import AgentForm from '../agent-form.svelte';
-
-	let { params } = $props();
-	const { slug } = $derived(params);
-
-	const agent = $derived(await getAgentById(slug));
 </script>
 
 <div class="flex flex-col gap-4 p-2 sm:p-8">
@@ -19,5 +13,5 @@
 		Back to agents
 	</a>
 
-	<AgentForm {agent} />
+	<AgentForm />
 </div>
