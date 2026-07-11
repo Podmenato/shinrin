@@ -1,6 +1,6 @@
 import { query, command, form } from '$app/server';
 import { db } from '$lib/server/db';
-import { agents, sessions } from '$lib/server/db/schema';
+import { agentTools, agents, sessions } from '$lib/server/db/schema';
 import { insertSessionSchema } from '$lib/server/db/schemas';
 import { eq, isNull, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
@@ -12,11 +12,15 @@ export const getAgents = query(async () => {
 
 export type Agent = InferSelectModel<typeof agents>;
 
-/** Returns a single agent by id. */
+/** Returns a single agent by id, along with the ids of its assigned tools. */
 export const getAgentById = query(v.pipe(v.string(), v.uuid()), async (id) => {
-	const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });
+	const agent = await db.query.agents.findFirst({
+		where: eq(agents.id, id),
+		with: { agentTools: true }
+	});
 	if (!agent) throw new Error('Agent not found');
-	return agent;
+	const { agentTools: assignedTools, ...rest } = agent;
+	return { ...rest, toolIds: assignedTools.map((t) => t.toolId) };
 });
 
 /** Returns all sessions for the given agent. */
@@ -50,26 +54,36 @@ export const createSession = command(
 	}
 );
 
-/** Updates an agent's name and system prompt. */
+/** Updates an agent's name, system prompt, and assigned tools. */
 export const updateAgent = form(
 	v.object({
 		id: v.pipe(v.string(), v.uuid()),
 		name: v.pipe(v.string(), v.nonEmpty()),
-		systemPrompt: v.string()
+		systemPrompt: v.string(),
+		toolIds: v.optional(v.array(v.pipe(v.string(), v.uuid())), [])
 	}),
-	async ({ id, name, systemPrompt }) => {
-		const [agent] = await db
-			.update(agents)
-			.set({
-				name,
-				systemPrompt: systemPrompt.trim() === '' ? null : systemPrompt,
-				updatedAt: new Date()
-			})
-			.where(eq(agents.id, id))
-			.returning();
-		if (!agent) {
-			throw new Error('Agent not found');
-		}
+	async ({ id, name, systemPrompt, toolIds }) => {
+		const agent = await db.transaction(async (tx) => {
+			const [agent] = await tx
+				.update(agents)
+				.set({
+					name,
+					systemPrompt: systemPrompt.trim() === '' ? null : systemPrompt,
+					updatedAt: new Date()
+				})
+				.where(eq(agents.id, id))
+				.returning();
+			if (!agent) {
+				throw new Error('Agent not found');
+			}
+
+			await tx.delete(agentTools).where(eq(agentTools.agentId, id));
+			if (toolIds.length > 0) {
+				await tx.insert(agentTools).values(toolIds.map((toolId) => ({ agentId: id, toolId })));
+			}
+
+			return agent;
+		});
 		await getAgents().refresh();
 		await getAgentById(id).refresh();
 		return agent;

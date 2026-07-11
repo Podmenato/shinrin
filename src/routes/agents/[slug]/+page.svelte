@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { getAgentById, updateAgent } from '$lib/agents.remote';
+	import { getTools } from '$lib/tools.remote';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Field from '$lib/components/ui/field/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
+	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { toast } from 'svelte-sonner';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
@@ -16,6 +18,7 @@
 	const { slug } = $derived(params);
 
 	const agent = $derived(await getAgentById(slug));
+	const allTools = $derived(await getTools());
 
 	const agentForm = $derived(updateAgent.for(agent.id));
 	const saveAgent = $derived(
@@ -64,6 +67,24 @@
 					/>
 					<Field.Error errors={agentForm.fields.systemPrompt.issues()} />
 				</Field.Field>
+
+				<Field.Set>
+					<Field.Legend variant="label">Tools</Field.Legend>
+					<div data-slot="checkbox-group" class="flex flex-col gap-3">
+						{#each allTools as tool (tool.id)}
+							<Field.Field orientation="horizontal">
+								<Checkbox
+									id="tool-{tool.id}"
+									name="toolIds[]"
+									value={tool.id}
+									checked={agent.toolIds.includes(tool.id)}
+								/>
+								<Field.Label for="tool-{tool.id}" class="font-normal">{tool.name}</Field.Label>
+							</Field.Field>
+						{/each}
+					</div>
+					<Field.Error errors={agentForm.fields.toolIds.issues()} />
+				</Field.Set>
 
 				<div class="flex items-center justify-end gap-2">
 					<DeleteAgentAction agentId={agent.id} />
