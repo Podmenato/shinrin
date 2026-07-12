@@ -14,6 +14,12 @@ export class LogMistakeTool implements Tool {
 				'Record an observation of a mistake the user made. Just log what happened, in plain language — do not worry about whether a similar mistake was logged before, that gets consolidated separately later.',
 			parameters: [
 				{
+					name: 'title',
+					type: 'string',
+					required: true,
+					description: "Short label for the mistake (e.g. 'は/が confusion')."
+				},
+				{
 					name: 'note',
 					type: 'string',
 					required: true,
@@ -25,9 +31,10 @@ export class LogMistakeTool implements Tool {
 	}
 
 	async execute(args: Record<string, unknown>): Promise<string> {
+		const title = args.title as string;
 		const note = args.note as string;
 
-		await db.insert(mistakeObservations).values({ agentId: this.agentId, note });
+		await db.insert(mistakeObservations).values({ agentId: this.agentId, title, note });
 
 		return 'Mistake logged.';
 	}

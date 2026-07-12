@@ -130,6 +130,7 @@ export const mistakeObservations = pgTable('mistake_observations', {
 	agentId: uuid('agent_id')
 		.notNull()
 		.references(() => agents.id),
+	title: text('title').notNull(),
 	note: text('note').notNull(),
 	createdAt: timestamp('created_at').defaultNow().notNull()
 });

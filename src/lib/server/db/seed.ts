@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
-import { agentSubagents, agentTools, agents, tools } from './schema';
+import { agentSubagents, agentTools, agents, mistakeObservations, tools } from './schema';
 import { currentMode, loadEnv } from '../env';
 
 // Runs standalone (tsx, not Vite) — nothing has populated process.env for
@@ -163,5 +163,33 @@ if (ankiAgent) {
 		.values(parentAgents.map((agent) => ({ agentId: agent.id, subagentId: ankiAgent.id })));
 }
 
-console.log('Seeded agents, tools, agent_tools and agent_subagents.');
+const MISTAKE_NOTES: Record<string, { title: string; note: string }[]> = {
+	Japanese: [
+		{
+			title: 'だ/です mixing',
+			note: 'Confused だ and です when switching between plain and polite form mid-sentence.'
+		},
+		{
+			title: 'て-form misuse',
+			note: 'Used て-form to connect two clauses that had no logical relation.'
+		},
+		{ title: '大人 misreading', note: 'Misread 大人 as だいにん instead of おとな.' }
+	],
+	Mandarin: [
+		{ title: 'Tone mixup', note: 'Mixed up the 3rd tone and 2nd tone in 你好.' },
+		{ title: '了 vs 要', note: 'Used 了 to express future intent instead of 要.' },
+		{ title: 'Missing measure word', note: 'Dropped the measure word before 书 in a sentence.' }
+	]
+};
+
+await db.delete(mistakeObservations);
+await db.insert(mistakeObservations).values(
+	Object.entries(MISTAKE_NOTES).flatMap(([agentName, notes]) => {
+		const agent = agentsByName.get(agentName);
+		if (!agent) return [];
+		return notes.map(({ title, note }) => ({ agentId: agent.id, title, note }));
+	})
+);
+
+console.log('Seeded agents, tools, agent_tools, agent_subagents and mistake_observations.');
 await client.end();
