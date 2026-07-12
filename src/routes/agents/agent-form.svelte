@@ -5,11 +5,14 @@
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Field from '$lib/components/ui/field/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
+	import * as Collapsible from '$lib/components/ui/collapsible/index.js';
+	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Spinner } from '$lib/components/ui/spinner/index.js';
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import { toast } from 'svelte-sonner';
 	import DeleteAgentAction from './[slug]/delete-agent-action.svelte';
 	import { formatDateTime } from '$lib/date';
@@ -21,6 +24,9 @@
 	const allTools = $derived(await getTools());
 	const assignableSubagents = $derived(await getAssignableSubagents(agent?.id ?? null));
 	const availableModels = $derived(await getAvailableModels());
+
+	let toolsOpen = $state(false);
+	let subagentsOpen = $state(false);
 
 	let isSubagent = $derived(agent?.isSubagent ?? false);
 	let defaultModel = $derived(agent?.defaultModel ?? '');
@@ -112,42 +118,72 @@
 			{/if}
 
 			<Field.Set>
-				<Field.Legend variant="label">Tools</Field.Legend>
-				<div data-slot="checkbox-group" class="flex flex-col gap-3">
-					{#each allTools as tool (tool.id)}
-						<Field.Field orientation="horizontal">
-							<Checkbox
-								id="tool-{tool.id}"
-								name="toolIds[]"
-								value={tool.id}
-								checked={agent?.toolIds.includes(tool.id) ?? false}
-							/>
-							<Field.Label for="tool-{tool.id}" class="font-normal">{tool.name}</Field.Label>
-						</Field.Field>
-					{/each}
-				</div>
+				<Collapsible.Root bind:open={toolsOpen}>
+					<Collapsible.Trigger
+						class="flex w-full items-center justify-between text-sm font-medium"
+					>
+						<span>Tools ({agent?.toolIds.length ?? 0} selected)</span>
+						<ChevronDownIcon
+							class="size-4 text-muted-foreground transition-transform {toolsOpen
+								? 'rotate-180'
+								: ''}"
+						/>
+					</Collapsible.Trigger>
+					<Collapsible.Content>
+						<ScrollArea class="mt-3 h-48 rounded-md border p-3">
+							<div data-slot="checkbox-group" class="flex flex-col gap-3">
+								{#each allTools as tool (tool.id)}
+									<Field.Field orientation="horizontal">
+										<Checkbox
+											id="tool-{tool.id}"
+											name="toolIds[]"
+											value={tool.id}
+											checked={agent?.toolIds.includes(tool.id) ?? false}
+										/>
+										<Field.Label for="tool-{tool.id}" class="font-normal">{tool.name}</Field.Label>
+									</Field.Field>
+								{/each}
+							</div>
+						</ScrollArea>
+					</Collapsible.Content>
+				</Collapsible.Root>
 				<Field.Error errors={agentForm.fields.toolIds.issues()} />
 			</Field.Set>
 
 			<Field.Set>
-				<Field.Legend variant="label">Subagents</Field.Legend>
-				<div data-slot="checkbox-group" class="flex flex-col gap-3">
-					{#each assignableSubagents as subagent (subagent.id)}
-						<Field.Field orientation="horizontal">
-							<Checkbox
-								id="subagent-{subagent.id}"
-								name="subagentIds[]"
-								value={subagent.id}
-								checked={agent?.subagentIds.includes(subagent.id) ?? false}
-							/>
-							<Field.Label for="subagent-{subagent.id}" class="font-normal">
-								{subagent.name}
-							</Field.Label>
-						</Field.Field>
-					{:else}
-						<p class="text-sm text-muted-foreground">No subagents available</p>
-					{/each}
-				</div>
+				<Collapsible.Root bind:open={subagentsOpen}>
+					<Collapsible.Trigger
+						class="flex w-full items-center justify-between text-sm font-medium"
+					>
+						<span>Subagents ({agent?.subagentIds.length ?? 0} selected)</span>
+						<ChevronDownIcon
+							class="size-4 text-muted-foreground transition-transform {subagentsOpen
+								? 'rotate-180'
+								: ''}"
+						/>
+					</Collapsible.Trigger>
+					<Collapsible.Content>
+						<ScrollArea class="mt-3 h-48 rounded-md border p-3">
+							<div data-slot="checkbox-group" class="flex flex-col gap-3">
+								{#each assignableSubagents as subagent (subagent.id)}
+									<Field.Field orientation="horizontal">
+										<Checkbox
+											id="subagent-{subagent.id}"
+											name="subagentIds[]"
+											value={subagent.id}
+											checked={agent?.subagentIds.includes(subagent.id) ?? false}
+										/>
+										<Field.Label for="subagent-{subagent.id}" class="font-normal">
+											{subagent.name}
+										</Field.Label>
+									</Field.Field>
+								{:else}
+									<p class="text-sm text-muted-foreground">No subagents available</p>
+								{/each}
+							</div>
+						</ScrollArea>
+					</Collapsible.Content>
+				</Collapsible.Root>
 				<Field.Error errors={agentForm.fields.subagentIds.issues()} />
 			</Field.Set>
 
