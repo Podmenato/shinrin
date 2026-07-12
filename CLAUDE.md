@@ -35,6 +35,20 @@ progress, mistake logs).
 - [src/lib/server/db/seed.ts](src/lib/server/db/seed.ts) currently seeds two
   example agents (Japanese, Mandarin language tutors) with prompts and tool
   assignments — this is example/dev content, not fixed product config.
+- **Subagents**: an agent with `agents.isSubagent = true` can be assigned to
+  other agents via the `agent_subagents` join table (`agentId` → `subagentId`,
+  both FK'd to `agents`); `agents.remote.ts`'s `computeAncestorIds` walks that
+  graph backward to stop cycles at assignment time, both in the UI list
+  (`getAssignableSubagents`) and again server-side in `saveAgent`. At runtime
+  [toolRegistry.ts](src/lib/server/tools/toolRegistry.ts)'s `getSubagentTools`
+  turns each assigned subagent into a
+  [SubagentTool](src/lib/server/tools/subagentTool.ts) — a normal `Tool` whose
+  `execute()` runs a full nested `Agent.create(...).run(...)` against the
+  target agent and returns its final reply as the tool result. A subagent
+  runs on its own `agents.defaultModel` if set, otherwise inherits whatever
+  model the calling agent is using. Nested runs are not specially persisted —
+  they show up as an ordinary tool call/result on the parent, same as any
+  other tool.
 
 ## Routes
 
@@ -111,6 +125,34 @@ progress, mistake logs).
   form directly for create, `.for(id)` for update — `.for()` only exists to key/dedupe
   concurrent instances on the same page (e.g. a list of editable rows), it doesn't
   change handler behavior. See `saveAgent` in [agents.remote.ts](src/lib/agents.remote.ts).
+- **bits-ui form components (`Checkbox`, `Select`, ...) don't play well with
+  `agentForm.fields.x.as(...)`** — two separate gotchas, both hit in
+  [agent-form.svelte](src/routes/agents/agent-form.svelte):
+  - They never dispatch real DOM `input`/`change` events on programmatic state
+    changes (only on genuine user interaction with their internal hidden
+    input), so the remote form's live tracking — `.value()`, `.issues()` —
+    which only listens for `input` events on the `<form>`, never updates from
+    them. Bind with real Svelte reactivity instead: `bind:checked`/`bind:value`
+    into a local `$state`, and set `name` by hand (e.g. `name="b:isSubagent"`
+    for a boolean field, matching the `b:`/`n:` prefix convention `.as()` would
+    otherwise add) so the value still submits correctly via `FormData` at
+    submit time — submission works fine regardless, since `handle_submit`
+    always reads the DOM fresh.
+  - `.as(...)` also injects a `type` attribute (`"checkbox"`, `"select"`, ...)
+    that collides with bits-ui's own same-named, differently-typed `type` prop
+    (`Checkbox`'s `type` is `"submit"|"button"`; `Select`'s is
+    `"single"|"multiple"`) — so `.as(...)` doesn't type-check on these
+    components at all. Set `name`/`checked`/`value` directly instead (see the
+    `toolIds[]`/`subagentIds[]` checkboxes for the pattern).
+- **`Select.Root`'s bound `value` can never actually be `undefined`** — bits-ui
+  force-defaults it to `""` (for `type="single"`) the instant it sees
+  `undefined`, and that propagates back through `bind:value`. Don't compute
+  trigger/placeholder text from the raw bound value with `??`/`||`; use a
+  separate `$derived` lookup instead, matching the current shadcn-svelte docs
+  pattern: `list.find((x) => x.value === boundValue)?.label ?? placeholder`
+  (see `modelTriggerContent` in [agent-form.svelte](src/routes/agents/agent-form.svelte)) —
+  `.find()` genuinely returns `undefined` on no match, so `??` is correct
+  *there*, just not against the raw bound value.
 
 ## UI / components
 
