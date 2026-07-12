@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
-import { agentTools, agents, tools } from './schema';
+import { agentSubagents, agentTools, agents, tools } from './schema';
 import { currentMode, loadEnv } from '../env';
 
 // Runs standalone (tsx, not Vite) — nothing has populated process.env for
@@ -20,7 +20,8 @@ const MEMORY_RULES =
 	'\n';
 
 const SHARED_RULES =
-	"Never call find_card or find_note before calling get_decks first and matching the user's deck against the real list. " +
+	'For any Anki operation — listing decks, searching notes or cards, checking review intervals, or adding sentence notes — call the anki subagent tool with one clear, self-contained natural-language instruction. ' +
+	'It has no memory of this conversation, so include every needed detail (deck names, full sentence/translation content, IDs). It will not ask you clarifying questions back, so be specific the first time.\n' +
 	'You have a maximum of 7 tool calls per response. Plan accordingly: if a task needs more steps than available, ask the user to clarify or break it down before calling any tools.\n' +
 	'\n' +
 	MEMORY_RULES;
@@ -59,11 +60,31 @@ const MANDARIN_SYSTEM_PROMPT =
 	'\n' +
 	SHARED_RULES;
 
+const ANKI_SYSTEM_PROMPT =
+	'You are an Anki operations subagent. Another agent calls you with a specific request and relays your reply straight to its own user — you never talk to a user directly.\n' +
+	'\n' +
+	'Do exactly what is asked using your tools, then reply with only the essential result: the requested data, an id, a count, or a short confirmation. ' +
+	'No greetings, no explaining what you are about to do, no follow-up questions, no suggestions — one line where possible.\n' +
+	'Never call find before calling get_decks first and matching the requested deck name against the real list.\n' +
+	'If a request is ambiguous, or names a deck, note type, or card that does not exist, say so in one line instead of guessing.\n' +
+	'You have a maximum of 7 tool calls per run.';
+
+const ANKI_SUBAGENT_DESCRIPTION =
+	'Executes Anki flashcard operations: listing decks, searching notes/cards, reading card intervals, and adding sentence notes. ' +
+	'Call it with one clear, self-contained natural-language instruction describing exactly what to do, including deck names and full content — it has no memory of this conversation. ' +
+	'Returns only the requested data or a short confirmation; it will not ask clarifying questions back.';
+
 await db
 	.insert(agents)
 	.values([
 		{ name: 'Japanese', systemPrompt: JAPANESE_SYSTEM_PROMPT },
-		{ name: 'Mandarin', systemPrompt: MANDARIN_SYSTEM_PROMPT }
+		{ name: 'Mandarin', systemPrompt: MANDARIN_SYSTEM_PROMPT },
+		{
+			name: 'Anki',
+			systemPrompt: ANKI_SYSTEM_PROMPT,
+			isSubagent: true,
+			subagentDescription: ANKI_SUBAGENT_DESCRIPTION
+		}
 	])
 	.onConflictDoNothing();
 
@@ -88,18 +109,59 @@ await db
 
 const allAgents = await db.select().from(agents);
 const allTools = await db.select().from(tools);
+const toolsByName = new Map(allTools.map((t) => [t.name, t]));
+const agentsByName = new Map(allAgents.map((a) => [a.name, a]));
 
-const excludedTools = ['add_note'];
-const filteredTools = allTools.filter((t) => !excludedTools.includes(t.name));
+function toolIdsFor(names: string[]): string[] {
+	return names.map((name) => {
+		const tool = toolsByName.get(name);
+		if (!tool) throw new Error(`Seed tool not found: ${name}`);
+		return tool.id;
+	});
+}
+
+const LANGUAGE_AGENT_TOOL_NAMES = [
+	'current_time_tool',
+	'save_memory',
+	'delete_memory',
+	'update_topic_progress',
+	'log_mistake'
+];
+
+// add_note is deliberately excluded — add_sentence_note is the preferred, less error-prone path.
+const ANKI_TOOL_NAMES = [
+	'get_decks',
+	'add_sentence_note',
+	'find',
+	'get_note_types',
+	'get_note_info',
+	'cards_info',
+	'get_intervals'
+];
+
+const agentToolNames: Record<string, string[]> = {
+	Japanese: LANGUAGE_AGENT_TOOL_NAMES,
+	Mandarin: LANGUAGE_AGENT_TOOL_NAMES,
+	Anki: ANKI_TOOL_NAMES
+};
 
 await db.delete(agentTools);
-await db
-	.insert(agentTools)
-	.values(
-		allAgents.flatMap((agent) =>
-			filteredTools.map((tool) => ({ agentId: agent.id, toolId: tool.id }))
-		)
-	);
+await db.insert(agentTools).values(
+	allAgents.flatMap((agent) =>
+		toolIdsFor(agentToolNames[agent.name] ?? []).map((toolId) => ({ agentId: agent.id, toolId }))
+	)
+);
 
-console.log('Seeded agents, tools and agent_tools.');
+const ankiAgent = agentsByName.get('Anki');
+await db.delete(agentSubagents);
+if (ankiAgent) {
+	const parentAgents = ['Japanese', 'Mandarin']
+		.map((name) => agentsByName.get(name))
+		.filter((agent) => agent !== undefined);
+	await db
+		.insert(agentSubagents)
+		.values(parentAgents.map((agent) => ({ agentId: agent.id, subagentId: ankiAgent.id })));
+}
+
+console.log('Seeded agents, tools, agent_tools and agent_subagents.');
 await client.end();

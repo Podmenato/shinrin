@@ -1,8 +1,8 @@
 import { query, command, form } from '$app/server';
 import { db } from '$lib/server/db';
-import { agentTools, agents, sessions } from '$lib/server/db/schema';
+import { agentSubagents, agentTools, agents, sessions } from '$lib/server/db/schema';
 import { insertSessionSchema } from '$lib/server/db/schemas';
-import { eq, isNull, type InferSelectModel } from 'drizzle-orm';
+import { and, eq, isNull, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
 
 /** Returns all non-deleted agents. */
@@ -12,16 +12,64 @@ export const getAgents = query(async () => {
 
 export type Agent = InferSelectModel<typeof agents>;
 
-/** Returns a single agent by id, along with the ids of its assigned tools. */
+/** Returns a single agent by id, along with the ids of its assigned tools and subagents. */
 export const getAgentById = query(v.pipe(v.string(), v.uuid()), async (id) => {
 	const agent = await db.query.agents.findFirst({
 		where: eq(agents.id, id),
-		with: { agentTools: true }
+		with: { agentTools: true, subagents: true }
 	});
 	if (!agent) throw new Error('Agent not found');
-	const { agentTools: assignedTools, ...rest } = agent;
-	return { ...rest, toolIds: assignedTools.map((t) => t.toolId) };
+	const { agentTools: assignedTools, subagents: assignedSubagents, ...rest } = agent;
+	return {
+		...rest,
+		toolIds: assignedTools.map((t) => t.toolId),
+		subagentIds: assignedSubagents.map((s) => s.subagentId)
+	};
 });
+
+/**
+ * Walks the `agent_subagents` graph backward from `agentId` to find every agent that can
+ * already reach it (directly or transitively). Assigning any of these as a subagent of
+ * `agentId` would close a cycle.
+ */
+async function computeAncestorIds(agentId: string): Promise<Set<string>> {
+	const edges = await db.select().from(agentSubagents);
+	const parentsOf = new Map<string, string[]>();
+	for (const edge of edges) {
+		if (!parentsOf.has(edge.subagentId)) parentsOf.set(edge.subagentId, []);
+		parentsOf.get(edge.subagentId)!.push(edge.agentId);
+	}
+
+	const ancestors = new Set<string>();
+	const queue = [agentId];
+	while (queue.length > 0) {
+		const current = queue.shift()!;
+		for (const parent of parentsOf.get(current) ?? []) {
+			if (!ancestors.has(parent)) {
+				ancestors.add(parent);
+				queue.push(parent);
+			}
+		}
+	}
+	return ancestors;
+}
+
+/**
+ * Returns agents flagged `isSubagent` that can be assigned to `agentId` without creating a
+ * cycle. Pass `null` for a not-yet-created agent, since it can't be anyone's ancestor yet.
+ */
+export const getAssignableSubagents = query(
+	v.nullable(v.pipe(v.string(), v.uuid())),
+	async (agentId) => {
+		const candidates = await db
+			.select()
+			.from(agents)
+			.where(and(eq(agents.isSubagent, true), isNull(agents.deletedAt)));
+		if (!agentId) return candidates;
+		const ancestors = await computeAncestorIds(agentId);
+		return candidates.filter((c) => c.id !== agentId && !ancestors.has(c.id));
+	}
+);
 
 /** Returns all sessions for the given agent. */
 export const getAgentSessions = query(v.pipe(v.string(), v.uuid()), async (agentId) => {
@@ -62,16 +110,28 @@ export const saveAgent = form(
 		systemPrompt: v.string(),
 		isSubagent: v.optional(v.boolean(), false),
 		subagentDescription: v.optional(v.string(), ''),
-		toolIds: v.optional(v.array(v.pipe(v.string(), v.uuid())), [])
+		defaultModel: v.optional(v.string(), ''),
+		toolIds: v.optional(v.array(v.pipe(v.string(), v.uuid())), []),
+		subagentIds: v.optional(v.array(v.pipe(v.string(), v.uuid())), [])
 	}),
-	async ({ id, name, systemPrompt, isSubagent, subagentDescription, toolIds }) => {
+	async ({
+		id,
+		name,
+		systemPrompt,
+		isSubagent,
+		subagentDescription,
+		defaultModel,
+		toolIds,
+		subagentIds
+	}) => {
 		const agent = await db.transaction(async (tx) => {
 			const values = {
 				name,
 				systemPrompt: systemPrompt.trim() === '' ? null : systemPrompt,
 				isSubagent,
 				subagentDescription:
-					isSubagent && subagentDescription.trim() !== '' ? subagentDescription : null
+					isSubagent && subagentDescription.trim() !== '' ? subagentDescription : null,
+				defaultModel: isSubagent && defaultModel.trim() !== '' ? defaultModel : null
 			};
 
 			let agent;
@@ -85,12 +145,24 @@ export const saveAgent = form(
 					throw new Error('Agent not found');
 				}
 				await tx.delete(agentTools).where(eq(agentTools.agentId, id));
+				await tx.delete(agentSubagents).where(eq(agentSubagents.agentId, id));
 			} else {
 				[agent] = await tx.insert(agents).values(values).returning();
 			}
 
 			if (toolIds.length > 0) {
 				await tx.insert(agentTools).values(toolIds.map((toolId) => ({ agentId: agent.id, toolId })));
+			}
+
+			if (subagentIds.length > 0) {
+				const ancestors = await computeAncestorIds(agent.id);
+				const invalid = subagentIds.filter((sid) => sid === agent.id || ancestors.has(sid));
+				if (invalid.length > 0) {
+					throw new Error('Cannot assign a subagent that would create a cycle');
+				}
+				await tx
+					.insert(agentSubagents)
+					.values(subagentIds.map((subagentId) => ({ agentId: agent.id, subagentId })));
 			}
 
 			return agent;

@@ -1,4 +1,8 @@
+import { eq } from 'drizzle-orm';
+import { db } from '../db/index';
+import { agentSubagents } from '../db/schema';
 import type { Tool } from './tool';
+import { SubagentTool } from './subagentTool';
 import { CurrentTimeTool } from './currentTimeTool';
 import { GetDecksTool } from './anki/getDecksTool';
 import { AddNoteTool } from './anki/addNoteTool';
@@ -45,4 +49,37 @@ export function getTools(names: string[], ctx: ToolContext): Tool[] {
 		}
 		return tool;
 	});
+}
+
+function subagentToolName(agentName: string): string {
+	return (
+		'subagent_' +
+		agentName
+			.trim()
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '_')
+			.replace(/^_+|_+$/g, '')
+	);
+}
+
+/**
+ * Resolves the agents assigned as subagents of `agentId` into callable tools. Each subagent
+ * runs on its own `defaultModel` if set, falling back to `callerModel` (the calling agent's
+ * model) otherwise.
+ */
+export async function getSubagentTools(agentId: string, callerModel: string): Promise<Tool[]> {
+	const rows = await db.query.agentSubagents.findMany({
+		where: eq(agentSubagents.agentId, agentId),
+		with: { subagent: true }
+	});
+
+	return rows.map(
+		(row) =>
+			new SubagentTool(
+				row.subagent.id,
+				subagentToolName(row.subagent.name),
+				row.subagent.subagentDescription ?? `Delegate a task to the "${row.subagent.name}" agent.`,
+				row.subagent.defaultModel ?? callerModel
+			)
+	);
 }

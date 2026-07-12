@@ -6,7 +6,7 @@ import { logger } from './logger';
 import { db } from './db/index';
 import { eq } from 'drizzle-orm';
 import { agents, sessions } from './db/schema';
-import { getTools } from './tools/toolRegistry';
+import { getTools, getSubagentTools } from './tools/toolRegistry';
 
 const MAX_ITERATIONS = 7;
 
@@ -42,12 +42,13 @@ export class Agent {
 			agent.agentTools.map((at) => at.tool.name),
 			{ agentId }
 		);
+		const subagentTools = await getSubagentTools(agentId, model);
 
 		const [session] = await db.insert(sessions).values({ agentId, name, model }).returning();
 
 		const contextManager = new ContextManager(agent.systemPrompt ?? '', session.id);
 
-		return new Agent(agentId, modelProvider, contextManager, tools);
+		return new Agent(agentId, modelProvider, contextManager, [...tools, ...subagentTools]);
 	}
 
 	static async createFromSession(sessionId: string, modelProvider: ModelProvider): Promise<Agent> {
@@ -65,11 +66,12 @@ export class Agent {
 			session.agent.agentTools.map((at) => at.tool.name),
 			{ agentId }
 		);
+		const subagentTools = await getSubagentTools(agentId, session.model);
 
 		const contextManager = new ContextManager(session.agent.systemPrompt ?? '', session.id);
 		await contextManager.load();
 
-		return new Agent(agentId, modelProvider, contextManager, tools);
+		return new Agent(agentId, modelProvider, contextManager, [...tools, ...subagentTools]);
 	}
 
 	async compact(): Promise<void> {

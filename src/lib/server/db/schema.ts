@@ -17,6 +17,7 @@ export const agents = pgTable('agents', {
 	systemPrompt: text('system_prompt'),
 	isSubagent: boolean('is_subagent').notNull().default(false),
 	subagentDescription: text('subagent_description'),
+	defaultModel: text('default_model'),
 	deletedAt: timestamp('deleted_at'),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
 	updatedAt: timestamp('updated_at').defaultNow().notNull()
@@ -40,6 +41,19 @@ export const agentTools = pgTable(
 			.references(() => tools.id)
 	},
 	(t) => [primaryKey({ columns: [t.agentId, t.toolId] })]
+);
+
+export const agentSubagents = pgTable(
+	'agent_subagents',
+	{
+		agentId: uuid('agent_id')
+			.notNull()
+			.references(() => agents.id),
+		subagentId: uuid('subagent_id')
+			.notNull()
+			.references(() => agents.id)
+	},
+	(t) => [primaryKey({ columns: [t.agentId, t.subagentId] })]
 );
 
 export const sessions = pgTable('sessions', {
@@ -122,7 +136,9 @@ export const mistakeObservations = pgTable('mistake_observations', {
 
 export const agentsRelations = relations(agents, ({ many }) => ({
 	agentTools: many(agentTools),
-	sessions: many(sessions)
+	sessions: many(sessions),
+	subagents: many(agentSubagents, { relationName: 'parent' }),
+	subagentOf: many(agentSubagents, { relationName: 'child' })
 }));
 
 export const toolsRelations = relations(tools, ({ many }) => ({
@@ -132,6 +148,19 @@ export const toolsRelations = relations(tools, ({ many }) => ({
 export const agentToolsRelations = relations(agentTools, ({ one }) => ({
 	agent: one(agents, { fields: [agentTools.agentId], references: [agents.id] }),
 	tool: one(tools, { fields: [agentTools.toolId], references: [tools.id] })
+}));
+
+export const agentSubagentsRelations = relations(agentSubagents, ({ one }) => ({
+	agent: one(agents, {
+		fields: [agentSubagents.agentId],
+		references: [agents.id],
+		relationName: 'parent'
+	}),
+	subagent: one(agents, {
+		fields: [agentSubagents.subagentId],
+		references: [agents.id],
+		relationName: 'child'
+	})
 }));
 
 export const sessionsRelations = relations(sessions, ({ one, many }) => ({

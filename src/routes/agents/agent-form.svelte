@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { saveAgent, type Agent } from '$lib/agents.remote';
+	import { saveAgent, getAssignableSubagents, type Agent } from '$lib/agents.remote';
 	import { getTools } from '$lib/tools.remote';
+	import { getAvailableModels } from '$lib/ollamaAdmin.remote';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Field from '$lib/components/ui/field/index.js';
+	import * as Select from '$lib/components/ui/select/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
@@ -14,11 +16,17 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 
-	const { agent }: { agent?: Agent & { toolIds: string[] } } = $props();
+	const { agent }: { agent?: Agent & { toolIds: string[]; subagentIds: string[] } } = $props();
 
 	const allTools = $derived(await getTools());
+	const assignableSubagents = $derived(await getAssignableSubagents(agent?.id ?? null));
+	const availableModels = $derived(await getAvailableModels());
 
 	let isSubagent = $derived(agent?.isSubagent ?? false);
+	let defaultModel = $derived(agent?.defaultModel ?? '');
+	const modelTriggerContent = $derived(
+		availableModels.find((m) => m.model === defaultModel)?.model ?? 'Use the calling agent’s model'
+	);
 
 	const agentForm = $derived(agent ? saveAgent.for(agent.id) : saveAgent);
 	const submitForm = $derived(
@@ -86,6 +94,21 @@
 					/>
 					<Field.Error errors={agentForm.fields.subagentDescription.issues()} />
 				</Field.Field>
+
+				<Field.Field>
+					<Field.Label for="defaultModel">Model</Field.Label>
+					<Select.Root type="single" name="defaultModel" bind:value={defaultModel}>
+						<Select.Trigger id="defaultModel" class="w-full">
+							{modelTriggerContent}
+						</Select.Trigger>
+						<Select.Content>
+							{#each availableModels as model (model.model)}
+								<Select.Item value={model.model} label={model.model} />
+							{/each}
+						</Select.Content>
+					</Select.Root>
+					<Field.Error errors={agentForm.fields.defaultModel.issues()} />
+				</Field.Field>
 			{/if}
 
 			<Field.Set>
@@ -104,6 +127,28 @@
 					{/each}
 				</div>
 				<Field.Error errors={agentForm.fields.toolIds.issues()} />
+			</Field.Set>
+
+			<Field.Set>
+				<Field.Legend variant="label">Subagents</Field.Legend>
+				<div data-slot="checkbox-group" class="flex flex-col gap-3">
+					{#each assignableSubagents as subagent (subagent.id)}
+						<Field.Field orientation="horizontal">
+							<Checkbox
+								id="subagent-{subagent.id}"
+								name="subagentIds[]"
+								value={subagent.id}
+								checked={agent?.subagentIds.includes(subagent.id) ?? false}
+							/>
+							<Field.Label for="subagent-{subagent.id}" class="font-normal">
+								{subagent.name}
+							</Field.Label>
+						</Field.Field>
+					{:else}
+						<p class="text-sm text-muted-foreground">No subagents available</p>
+					{/each}
+				</div>
+				<Field.Error errors={agentForm.fields.subagentIds.issues()} />
 			</Field.Set>
 
 			<div class="flex items-center justify-end gap-2">

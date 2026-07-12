@@ -7,6 +7,9 @@ export type { OllamaModel };
 
 const POLL_INTERVAL_MS = 5_000;
 
+/** Returns downloaded Ollama models once, for populating a model picker (no live polling). */
+export const getAvailableModels = query(async () => listModels());
+
 /**
  * Streams downloaded Ollama models, annotated with running state, polling every 5s while a client is connected.
  * On first hydration yields null.
