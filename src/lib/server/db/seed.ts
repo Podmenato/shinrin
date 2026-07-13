@@ -1,7 +1,14 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
-import { agentSubagents, agentTools, agents, mistakeObservations, tools } from './schema';
+import {
+	agentSubagents,
+	agentTools,
+	agents,
+	mistakeObservations,
+	studyTopics,
+	tools
+} from './schema';
 import { currentMode, loadEnv } from '../env';
 
 // Runs standalone (tsx, not Vite) — nothing has populated process.env for
@@ -146,11 +153,13 @@ const agentToolNames: Record<string, string[]> = {
 };
 
 await db.delete(agentTools);
-await db.insert(agentTools).values(
-	allAgents.flatMap((agent) =>
-		toolIdsFor(agentToolNames[agent.name] ?? []).map((toolId) => ({ agentId: agent.id, toolId }))
-	)
-);
+await db
+	.insert(agentTools)
+	.values(
+		allAgents.flatMap((agent) =>
+			toolIdsFor(agentToolNames[agent.name] ?? []).map((toolId) => ({ agentId: agent.id, toolId }))
+		)
+	);
 
 const ankiAgent = agentsByName.get('Anki');
 await db.delete(agentSubagents);
@@ -191,5 +200,42 @@ await db.insert(mistakeObservations).values(
 	})
 );
 
-console.log('Seeded agents, tools, agent_tools, agent_subagents and mistake_observations.');
+const TOPIC_PROGRESS: Record<string, { topic: string; status: string; notes?: string }[]> = {
+	Japanese: [
+		{
+			topic: 'べき grammar',
+			status: 'practicing',
+			notes: 'Comfortable with plain statements, still shaky on negative form べきではない.'
+		},
+		{ topic: 'て-form', status: 'mastered' },
+		{
+			topic: 'keigo basics',
+			status: 'introduced',
+			notes: 'Covered 尊敬語 vs 謙譲語 distinction once.'
+		}
+	],
+	Mandarin: [
+		{ topic: 'tones 1-4', status: 'practicing', notes: '3rd tone sandhi still inconsistent.' },
+		{ topic: 'family vocab', status: 'introduced' },
+		{ topic: 'numbers 1-100', status: 'mastered' }
+	]
+};
+
+await db.delete(studyTopics);
+await db.insert(studyTopics).values(
+	Object.entries(TOPIC_PROGRESS).flatMap(([agentName, topics]) => {
+		const agent = agentsByName.get(agentName);
+		if (!agent) return [];
+		return topics.map(({ topic, status, notes }) => ({
+			agentId: agent.id,
+			topic,
+			status,
+			notes: notes ?? null
+		}));
+	})
+);
+
+console.log(
+	'Seeded agents, tools, agent_tools, agent_subagents, mistake_observations and study_topics.'
+);
 await client.end();

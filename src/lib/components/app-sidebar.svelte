@@ -7,13 +7,15 @@
 	import BotIcon from '@lucide/svelte/icons/bot';
 	import ServerIcon from '@lucide/svelte/icons/server';
 	import CircleXIcon from '@lucide/svelte/icons/circle-x';
+	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import SunIcon from '@lucide/svelte/icons/sun';
 	import MoonIcon from '@lucide/svelte/icons/moon';
 
 	const items = [
 		{ title: 'Home', href: resolve('/'), icon: HouseIcon },
 		{ title: 'Agents', href: resolve('/agents'), icon: BotIcon },
-		{ title: 'Mistakes', href: resolve('/mistakes'), icon: CircleXIcon }
+		{ title: 'Mistakes', href: resolve('/mistakes'), icon: CircleXIcon },
+		{ title: 'Topics', href: resolve('/topics'), icon: BookOpenIcon }
 	];
 	const footerItems = [{ title: 'Ollama Settings', href: resolve('/ollama'), icon: ServerIcon }];
 </script>
