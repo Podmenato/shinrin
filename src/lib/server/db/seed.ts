@@ -5,7 +5,9 @@ import {
 	agentSubagents,
 	agentTools,
 	agents,
+	messages,
 	mistakeObservations,
+	sessions,
 	studyTopics,
 	tools
 } from './schema';
@@ -235,7 +237,97 @@ await db.insert(studyTopics).values(
 	})
 );
 
+const SESSION_SEEDS: Record<
+	string,
+	{ name: string; model: string; messages: { role: 'user' | 'assistant'; content: string }[] }[]
+> = {
+	Japanese: [
+		{
+			name: 'べき grammar practice',
+			model: 'gemma4:26b-mlx',
+			messages: [
+				{ role: 'user', content: 'Can you explain when to use べきではない vs べきじゃない?' },
+				{
+					role: 'assistant',
+					content:
+						'べきではない is the more formal/written form, while べきじゃない is casual spoken Japanese. Both mean "should not" — 彼は行くべきではない (formal) vs 彼は行くべきじゃない (casual). Want a few contrastive example sentences?'
+				},
+				{ role: 'user', content: 'Yes, a couple examples would help.' },
+				{
+					role: 'assistant',
+					content:
+						'1. 授業中にスマホを使うべきではない。(You should not use your phone during class — formal)\n2. そんなに焦るべきじゃないよ。(You shouldn’t rush so much — casual, said to a friend)'
+				}
+			]
+		},
+		{
+			name: 'Keigo roleplay',
+			model: 'gemma4:31b-mlx',
+			messages: [
+				{ role: 'user', content: "Let's roleplay a job interview in keigo." },
+				{
+					role: 'assistant',
+					content:
+						'かしこまりました。では面接官として始めますね。「本日はお越しいただき、誠にありがとうございます。まず自己紹介をお願いできますでしょうか。」'
+				}
+			]
+		}
+	],
+	Mandarin: [
+		{
+			name: 'Tone practice: 你好',
+			model: 'gemma4:e4b-mlx',
+			messages: [
+				{ role: 'user', content: 'Why do I keep mixing up the tones in 你好?' },
+				{
+					role: 'assistant',
+					content:
+						'你 and 好 are both 3rd tone — when two 3rd tones meet in a row, the first one shifts to a 2nd tone in speech (tone sandhi), so 你好 is actually said ní hǎo, not nǐ hǎo. Want a few more 3rd-tone pairs to practice?'
+				},
+				{ role: 'user', content: 'Yes please, give me some examples.' },
+				{
+					role: 'assistant',
+					content:
+						'我很好 (wǒ hěn hǎo) → 我 shifts to 2nd tone: wó hěn hǎo.\nTry saying 你也很好 out loud — 你 and 也 both shift up since they lead into another 3rd tone.'
+				}
+			]
+		},
+		{
+			name: 'Family vocab intro',
+			model: 'qwen3.6:27b-mlx',
+			messages: [
+				{ role: 'user', content: 'Teach me basic family words.' },
+				{
+					role: 'assistant',
+					content:
+						'爸爸 (bàba) = dad, 妈妈 (māma) = mom, 哥哥 (gēge) = older brother, 姐姐 (jiějie) = older sister. Want younger sibling words too?'
+				}
+			]
+		}
+	]
+};
+
+await db.delete(messages);
+await db.delete(sessions);
+for (const [agentName, sessionSeeds] of Object.entries(SESSION_SEEDS)) {
+	const agent = agentsByName.get(agentName);
+	if (!agent) continue;
+	for (const seed of sessionSeeds) {
+		const [session] = await db
+			.insert(sessions)
+			.values({ agentId: agent.id, name: seed.name, model: seed.model })
+			.returning();
+		await db.insert(messages).values(
+			seed.messages.map((m) => ({
+				sessionId: session.id,
+				role: m.role,
+				content: m.content
+			}))
+		);
+	}
+}
+
 console.log(
-	'Seeded agents, tools, agent_tools, agent_subagents, mistake_observations and study_topics.'
+	'Seeded agents, tools, agent_tools, agent_subagents, mistake_observations, study_topics, sessions and messages.'
 );
 await client.end();

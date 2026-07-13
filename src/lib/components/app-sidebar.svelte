@@ -4,6 +4,7 @@
 	import { mode, toggleMode } from 'mode-watcher';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import HouseIcon from '@lucide/svelte/icons/house';
+	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import BotIcon from '@lucide/svelte/icons/bot';
 	import ServerIcon from '@lucide/svelte/icons/server';
 	import CircleXIcon from '@lucide/svelte/icons/circle-x';
@@ -13,6 +14,7 @@
 
 	const items = [
 		{ title: 'Home', href: resolve('/'), icon: HouseIcon },
+		{ title: 'Chat', href: resolve('/chat'), icon: MessageSquareIcon },
 		{ title: 'Agents', href: resolve('/agents'), icon: BotIcon },
 		{ title: 'Mistakes', href: resolve('/mistakes'), icon: CircleXIcon },
 		{ title: 'Topics', href: resolve('/topics'), icon: BookOpenIcon }
