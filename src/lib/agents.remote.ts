@@ -2,7 +2,7 @@ import { query, command, form } from '$app/server';
 import { db } from '$lib/server/db';
 import { agentSubagents, agentTools, agents, sessions } from '$lib/server/db/schema';
 import { insertSessionSchema } from '$lib/server/db/schemas';
-import { and, eq, isNull, type InferSelectModel } from 'drizzle-orm';
+import { and, desc, eq, isNull, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
 
 /** Returns all non-deleted agents. */
@@ -90,7 +90,8 @@ export const getAllSessions = query(async () => {
 			createdAt: sessions.createdAt
 		})
 		.from(sessions)
-		.innerJoin(agents, eq(sessions.agentId, agents.id));
+		.innerJoin(agents, eq(sessions.agentId, agents.id))
+		.orderBy(desc(sessions.createdAt));
 });
 
 /** Creates a new session for the given agent. */
@@ -98,6 +99,7 @@ export const createSession = command(
 	v.pick(insertSessionSchema, ['agentId', 'name', 'model']),
 	async ({ agentId, name, model }) => {
 		const [session] = await db.insert(sessions).values({ agentId, name, model }).returning();
+		await getAllSessions().refresh();
 		return session;
 	}
 );

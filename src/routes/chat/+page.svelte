@@ -1,11 +1,15 @@
 <script lang="ts">
-	import { getAgents, getAllSessions } from '$lib/agents.remote';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { getAgents, getAllSessions, createSession } from '$lib/agents.remote';
 	import { getAvailableModels } from '$lib/ollamaAdmin.remote';
+	import { runAgent } from '$lib/sessions.remote';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Field from '$lib/components/ui/field/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { Spinner } from '$lib/components/ui/spinner/index.js';
 	import DataTable, { type DataTableColumn } from '$lib/components/data-table/data-table.svelte';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import { formatDateTime } from '$lib/date';
@@ -17,6 +21,19 @@
 	let prompt = $state('');
 	let agentId = $state('');
 	let model = $state('');
+
+	let isSending = $derived(createSession.pending > 0);
+	let canStartChat = $derived(!prompt.trim() || !agentId || !model || isSending);
+
+	async function startChat() {
+		if (!canStartChat) return;
+
+		const trimmed = prompt.trim();
+
+		const session = await createSession({ agentId, name: trimmed.slice(0, 60), model });
+		await runAgent({ sessionId: session.id, prompt: trimmed });
+		await goto(resolve(`/chat/${session.id}`));
+	}
 
 	const agentTriggerContent = $derived(
 		agents.current?.find((a) => a.id === agentId)?.name ?? 'Select an agent'
@@ -42,7 +59,13 @@
 			<Card.Description>Pick an agent and model, then start a conversation.</Card.Description>
 		</Card.Header>
 		<Card.Content>
-			<form class="flex flex-col gap-4" onsubmit={(e) => e.preventDefault()}>
+			<form
+				class="flex flex-col gap-4"
+				onsubmit={(e) => {
+					e.preventDefault();
+					startChat();
+				}}
+			>
 				<div class="grid gap-4 sm:grid-cols-2">
 					<Field.Field>
 						<Field.Label for="agent">Agent</Field.Label>
@@ -84,7 +107,13 @@
 				</Field.Field>
 
 				<div class="flex justify-end">
-					<Button type="submit">Start chat</Button>
+					<Button type="submit" disabled={isSending}>
+						{#if isSending}
+							<Spinner />
+						{:else}
+							Start chat
+						{/if}
+					</Button>
 				</div>
 			</form>
 		</Card.Content>
@@ -104,6 +133,7 @@
 				Icon={MessageSquareIcon}
 				emptyTitle="No sessions yet"
 				emptyDesc="Start a chat above to create your first session."
+				onRowClick={(session) => goto(resolve(`/chat/${session.id}`))}
 			/>
 		</Card.Content>
 	</Card.Root>
