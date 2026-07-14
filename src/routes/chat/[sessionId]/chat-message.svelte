@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { renderMarkdown } from '$lib/markdown';
+	import Markdown from '$lib/markdown/Markdown.svelte';
 	import type { Message } from '$lib/server/contextManager';
 
 	const { message }: { message: Message } = $props();
@@ -13,8 +13,7 @@
 	<div class="flex flex-col gap-2">
 		{#if message.content}
 			<div class="prose prose-sm max-w-none dark:prose-invert">
-				<!--TODO: fix by creating our own renderer, or sanitizing properly -->
-				{@html renderMarkdown(message.content)}
+				<Markdown content={message.content} />
 			</div>
 		{/if}
 		{#each message.toolCalls as toolCall (toolCall.name)}

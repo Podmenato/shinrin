@@ -22,8 +22,8 @@
 	let agentId = $state('');
 	let model = $state('');
 
-	let isSending = $derived(createSession.pending > 0);
-	let canStartChat = $derived(!prompt.trim() || !agentId || !model || isSending);
+	const isSending = $derived(createSession.pending > 0 || runAgent.pending > 0);
+	const canStartChat = $derived(prompt.trim() !== '' && !!agentId && !!model && !isSending);
 
 	async function startChat() {
 		if (!canStartChat) return;
@@ -107,7 +107,7 @@
 				</Field.Field>
 
 				<div class="flex justify-end">
-					<Button type="submit" disabled={isSending}>
+					<Button type="submit" disabled={!canStartChat}>
 						{#if isSending}
 							<Spinner />
 						{:else}
