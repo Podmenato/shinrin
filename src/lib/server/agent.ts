@@ -78,7 +78,9 @@ export class Agent {
 		await this.ctx.compact(this.provider);
 	}
 
-	async run(prompt: string): Promise<string> {
+	async run(prompt: string, onChunk?: (delta: string) => void): Promise<string> {
+		const isStreaming = onChunk !== undefined;
+
 		await this.ctx.add({ role: 'user', content: prompt });
 		logger.info({ prompt, tools: this.tools.map((t) => t.definition.name) }, 'agent run started');
 
@@ -88,7 +90,19 @@ export class Agent {
 			iterations++;
 			logger.debug({ iteration: iterations }, 'agent iteration');
 
-			const response = await this.provider.chat(this.ctx.build(), this.tools);
+			let response;
+
+			if (isStreaming) {
+				const stream = this.provider.chatStream(this.ctx.build(), this.tools);
+				let next = await stream.next();
+				while (!next.done) {
+					onChunk(next.value);
+					next = await stream.next();
+				}
+				response = next.value;
+			} else {
+				response = await this.provider.chat(this.ctx.build(), this.tools);
+			}
 
 			const hasToolCalls = response.toolCalls !== undefined && response.toolCalls.length > 0;
 			if (response.content || hasToolCalls) {

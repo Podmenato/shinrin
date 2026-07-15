@@ -50,6 +50,13 @@
 		{ name: 'Model', width: 'w-48', cell: (session) => session.model },
 		{ name: 'Created', width: 'w-40', cell: (session) => formatDateTime(session.createdAt) }
 	];
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			startChat();
+		}
+	}
 </script>
 
 <div class="flex flex-col gap-6 p-2 sm:p-8">
@@ -103,6 +110,7 @@
 						class="min-h-32"
 						placeholder="Ask something..."
 						bind:value={prompt}
+						onkeydown={handleKeydown}
 					/>
 				</Field.Field>
 

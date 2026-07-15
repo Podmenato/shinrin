@@ -60,13 +60,30 @@ progress, mistake logs).
 - [src/lib/components/app-sidebar.svelte](src/lib/components/app-sidebar.svelte) —
   sidebar nav content (menu items, dark-mode toggle button). Add new nav
   items here.
-- The chat UI (previously `src/routes/chat/[sessionId]/`) was torn down and
-  is pending a rebuild on the shadcn-svelte base; the remote functions it
-  used ([sessions.remote.ts](src/lib/sessions.remote.ts),
-  [agents.remote.ts](src/lib/agents.remote.ts),
-  [models.remote.ts](src/lib/models.remote.ts)) and
-  [markdown.ts](src/lib/markdown.ts) are unused right now but left intact
-  for that rebuild.
+- `src/routes/chat/` — chat UI, rebuilt on the shadcn-svelte base.
+  `src/routes/chat/+page.svelte` is the launcher: agent/model selects +
+  message composer to start a new session (`createSession` +
+  `runAgent` from [sessions.remote.ts](src/lib/sessions.remote.ts), then
+  `goto`'s into it), plus a table of past sessions (`getAllSessions` from
+  [agents.remote.ts](src/lib/agents.remote.ts)) to resume one.
+  `src/routes/chat/[sessionId]/+page.svelte` is the conversation screen —
+  transcript (`getSessionMessages`) + composer (`runAgent`); agent/model are
+  shown read-only there since both are fixed per session at creation time
+  ([schema.ts](src/lib/server/db/schema.ts) `sessions.agentId`/`model`).
+  No streaming yet — submitting shows a pending state (`command.pending`)
+  until the full reply resolves; `models.remote.ts` is superseded by
+  [ollamaAdmin.remote.ts](src/lib/ollamaAdmin.remote.ts)'s `getAvailableModels`.
+- **Markdown rendering** — `src/lib/markdown/` (`parser.ts` +
+  `Markdown.svelte`/`MarkdownBlock.svelte`/`MarkdownInline.svelte`) parses a
+  constrained markdown subset into a plain node tree and renders it through
+  real Svelte elements/text interpolation. Deliberately never uses `{@html}`
+  anywhere in the path — message content is untrusted agent/LLM output, and
+  this way there's nothing to sanitize because nothing is ever parsed as an
+  HTML string. Superseded the old string-returning `src/lib/markdown.ts`
+  (deleted) for exactly this reason. See `parser.test.ts` for the supported
+  subset (headers, emphasis with CommonMark-style flanking-delimiter rules,
+  inline/block code, links with a safe-URL allowlist, lists, blockquotes,
+  tables, `hr`).
 - Data fetching uses SvelteKit's **remote functions** (`query`/`command` from
   `$app/server`, in `src/lib/*.remote.ts` — e.g.
   [agents.remote.ts](src/lib/agents.remote.ts),

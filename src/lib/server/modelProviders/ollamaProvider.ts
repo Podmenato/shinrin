@@ -73,4 +73,42 @@ export class OllamaProvider implements ModelProvider {
 			}))
 		};
 	}
+
+	async *chatStream(
+		messages: Message[],
+		tools: Tool[]
+	): AsyncGenerator<string, ModelResponse, void> {
+		logger.debug(
+			{ model: this.model, messageCount: messages.length },
+			'sending streaming chat request'
+		);
+		logger.trace({ messages }, 'context');
+
+		const stream = await this.ollama.chat({
+			model: this.model,
+			messages: messages.map(toOllamaMessage),
+			tools: tools.map(toOllamaTool),
+			stream: true
+		});
+
+		let content = '';
+		let toolCalls: ModelResponse['toolCalls'];
+
+		for await (const chunk of stream) {
+			if (chunk.message.content) {
+				content += chunk.message.content;
+				yield chunk.message.content;
+			}
+			if (chunk.message.tool_calls?.length) {
+				toolCalls = chunk.message.tool_calls.map((tc) => ({
+					name: tc.function.name,
+					args: tc.function.arguments
+				}));
+			}
+		}
+
+		logger.debug({ hasToolCalls: !!toolCalls?.length }, 'received streaming chat response');
+
+		return { content, toolCalls };
+	}
 }
