@@ -5,9 +5,16 @@ import svelte from 'eslint-plugin-svelte';
 import { defineConfig, includeIgnoreFile } from 'eslint/config';
 import globals from 'globals';
 import ts from 'typescript-eslint';
-import { compilerOptions } from './svelte.compiler-options.js';
-
-const svelteConfig = { compilerOptions };
+const svelteConfig = {
+	compilerOptions: {
+		// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
+		runes: ({ filename }) =>
+			filename.split(/[/\\]/).includes('node_modules') ? undefined : true,
+		experimental: {
+			async: true
+		}
+	}
+};
 
 const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
 

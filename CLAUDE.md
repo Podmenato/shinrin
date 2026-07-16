@@ -189,11 +189,13 @@ to release.
   if either file exists at all. All config (`adapter`, `experimental`, `typescript`,
   `alias`, `compilerOptions`, ...) now goes through the `sveltekit(...)` Vite plugin
   call in [vite.config.ts](vite.config.ts), with the old `kit.*` fields passed as
-  flat top-level properties instead of nested under `kit:`. The shared
-  `compilerOptions` (the `runes` function + `experimental.async`) live in
-  [svelte.compiler-options.js](svelte.compiler-options.js) instead, since
-  `eslint.config.js` also needs them (`eslint-plugin-svelte`'s `svelteConfig` parser
-  option) and can no longer import them from `svelte.config.js` either.
+  flat top-level properties instead of nested under `kit:`. `eslint.config.js` needs
+  the same `compilerOptions` (the `runes` function + `experimental.async`) for
+  `eslint-plugin-svelte`'s `svelteConfig` parser option and can't import them from
+  `svelte.config.js` anymore either — kept as small, deliberately duplicated literals
+  in both files rather than a shared module, since a previous shared
+  `svelte.compiler-options.js` file seemed to be what confused the IDE's Svelte
+  language server (see the `experimental_async` false-positive note below).
 - **Env vars are now explicit, not dynamic** — `$env/dynamic/private`,
   `$env/static/private`, etc. are gone (removed from the shipped types entirely, so
   this fails at the TypeScript level, not just at runtime). Declare each var your
@@ -229,10 +231,19 @@ to release.
   navigation — until a hard reload rebuilds the app fresh. Not fixable from app
   code (it's in Svelte's `Boundary` class + kit's error-transform pipeline).
   **Workaround**: [error-empty-state.svelte](src/lib/components/error-empty-state.svelte)'s
-  recovery link uses `data-sveltekit-reload="true"` to force a real full-page
-  navigation instead of client-side routing, which sidesteps the bug entirely (a
-  fresh app instance has no stale boundary state). Remove that attribute + this note
-  once upstream ships a real fix.
+  recovery link uses `data-sveltekit-reload={true}` (a real boolean — `="true"` fails
+  type-checking, that attribute's type is `boolean | "" | null | undefined`) to force
+  a real full-page navigation instead of client-side routing, which sidesteps the bug
+  entirely (a fresh app instance has no stale boundary state). Remove that attribute +
+  this note once upstream ships a real fix.
+- **IDE may falsely report `Cannot use \`await\` in deriveds... unless
+  \`experimental.async\` is true`** (svelte.dev/e/experimental_async) even though the
+  option is set and the real compiler (Vite dev server, `pnpm build`) is fine with it
+  — the Svelte language server can go stale on `experimental.async`'s new home in
+  `vite.config.ts`'s `sveltekit(...)` call, same class of issue as the ESLint one
+  above. `pnpm run verify` (`check` + `lint`) is the way to confirm whether an error
+  is real or just a stale IDE/language-server cache — if `verify` is clean, restart
+  the editor's Svelte extension rather than "fixing" code that isn't broken.
 
 ## UI / components
 
