@@ -119,9 +119,7 @@
 
 			<Field.Set>
 				<Collapsible.Root bind:open={toolsOpen}>
-					<Collapsible.Trigger
-						class="flex w-full items-center justify-between text-sm font-medium"
-					>
+					<Collapsible.Trigger class="flex w-full items-center justify-between text-sm font-medium">
 						<span>Tools ({agent?.toolIds.length ?? 0} selected)</span>
 						<ChevronDownIcon
 							class="size-4 text-muted-foreground transition-transform {toolsOpen
@@ -152,9 +150,7 @@
 
 			<Field.Set>
 				<Collapsible.Root bind:open={subagentsOpen}>
-					<Collapsible.Trigger
-						class="flex w-full items-center justify-between text-sm font-medium"
-					>
+					<Collapsible.Trigger class="flex w-full items-center justify-between text-sm font-medium">
 						<span>Subagents ({agent?.subagentIds.length ?? 0} selected)</span>
 						<ChevronDownIcon
 							class="size-4 text-muted-foreground transition-transform {subagentsOpen

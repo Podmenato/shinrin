@@ -34,7 +34,7 @@
 			<!-- Full-page reload, not client-side nav: sveltejs/kit#16207 means a boundary that has
 			     already failed once doesn't reliably clear on client-side navigation, so this link
 			     forces a real navigation to get a clean app instance instead. -->
-			<Button {href} data-sveltekit-reload="true">{linkText}</Button>
+			<Button {href} data-sveltekit-reload={true}>{linkText}</Button>
 		</Empty.Content>
 	</Empty.Root>
 </div>

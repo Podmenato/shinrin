@@ -114,7 +114,7 @@ progress, mistake logs).
   models (via [src/lib/server/ollamaAdmin.ts](src/lib/server/ollamaAdmin.ts)),
   polling every 5s server-side for as long as `src/routes/ollama/` has a client
   connected.
-- **`query.live` SSR gotcha**: if the generator's *first* `yield` requires real
+- **`query.live` SSR gotcha**: if the generator's _first_ `yield` requires real
   async I/O (e.g. `yield await someFetch()`), there's a race between that promise
   resolving and SvelteKit serializing the SSR response. Losing that race throws
   `hydratable_missing_but_required` during hydration — **in dev mode this is a
@@ -138,7 +138,7 @@ progress, mistake logs).
   function's return value. That's on the `result` getter, which is only populated once
   `submit()` resolves. Don't destructure `{ result }` out of the callback argument up
   front — that reads the getter before submission completes, giving a stale/`undefined`
-  value. Read `form.result` *after* `await form.submit()`.
+  value. Read `form.result` _after_ `await form.submit()`.
 - A single `form()` can serve create-or-update: make `id` optional in the validation
   schema and branch on its presence inside the handler (insert vs update). Call the
   form directly for create, `.for(id)` for update — `.for()` only exists to key/dedupe
@@ -171,7 +171,7 @@ progress, mistake logs).
   pattern: `list.find((x) => x.value === boundValue)?.label ?? placeholder`
   (see `modelTriggerContent` in [agent-form.svelte](src/routes/agents/agent-form.svelte)) —
   `.find()` genuinely returns `undefined` on no match, so `??` is correct
-  *there*, just not against the raw bound value.
+  _there_, just not against the raw bound value.
 
 ## SvelteKit 3
 
@@ -222,7 +222,7 @@ to release.
   Two bugs compound: Svelte's own `Boundary` class doesn't destroy its previous
   `#main_effect`/`#failed_effect` when the block effect re-runs (any navigation
   triggers this), and there's a race in SvelteKit's async `transformError` step
-  where the boundary can re-render *before* the previous error's transform promise
+  where the boundary can re-render _before_ the previous error's transform promise
   resolves, attaching a stale failed-state effect to whatever route you've since
   navigated to. Net effect: once any boundary anywhere has failed once, its old
   error can spuriously reappear on a later, completely unrelated, successful

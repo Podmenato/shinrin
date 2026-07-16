@@ -91,11 +91,7 @@ export class AddNoteTool implements Tool {
 			);
 		}
 
-		if (
-			typeof args.fields !== 'object' ||
-			args.fields === null ||
-			Array.isArray(args.fields)
-		) {
+		if (typeof args.fields !== 'object' || args.fields === null || Array.isArray(args.fields)) {
 			throw new ToolError('fields must be an object.');
 		}
 		for (const [key, value] of Object.entries(args.fields as Record<string, unknown>)) {

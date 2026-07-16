@@ -17,8 +17,7 @@ export class GetIntervalsTool implements Tool {
 			{
 				name: 'complete',
 				type: 'boolean',
-				description:
-					'If true, returns full interval history instead of just the most recent value',
+				description: 'If true, returns full interval history instead of just the most recent value',
 				required: false
 			}
 		]
