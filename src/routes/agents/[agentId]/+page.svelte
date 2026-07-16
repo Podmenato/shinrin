@@ -5,9 +5,9 @@
 	import AgentForm from '../agent-form.svelte';
 
 	let { params } = $props();
-	const { slug } = $derived(params);
+	const { agentId } = $derived(params);
 
-	const agent = $derived(await getAgentById(slug));
+	const agent = $derived(await getAgentById(agentId));
 </script>
 
 <div class="flex flex-col gap-4 p-2 sm:p-8">

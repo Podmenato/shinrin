@@ -14,7 +14,7 @@
 	import { Spinner } from '$lib/components/ui/spinner/index.js';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import { toast } from 'svelte-sonner';
-	import DeleteAgentAction from './[slug]/delete-agent-action.svelte';
+	import DeleteAgentAction from './[agentId]/delete-agent-action.svelte';
 	import { formatDateTime } from '$lib/date';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
