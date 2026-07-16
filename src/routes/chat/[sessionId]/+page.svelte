@@ -14,6 +14,7 @@
 	import { Spinner } from '$lib/components/ui/spinner/index.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import ChatMessage from './chat-message.svelte';
+	import { toast } from 'svelte-sonner';
 
 	let { params }: { params: { sessionId: string } } = $props();
 	const { sessionId } = $derived(params);
@@ -45,8 +46,12 @@
 
 		if (!trimmed || isSending) return;
 
-		await runAgent({ sessionId, prompt: trimmed });
-		prompt = '';
+		try {
+			await runAgent({ sessionId, prompt: trimmed });
+			prompt = '';
+		} catch {
+			toast.error('Failed to send message');
+		}
 	}
 
 	function handleKeydown(e: KeyboardEvent) {

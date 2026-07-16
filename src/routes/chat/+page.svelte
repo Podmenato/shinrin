@@ -13,6 +13,7 @@
 	import DataTable, { type DataTableColumn } from '$lib/components/data-table/data-table.svelte';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import { formatDateTime } from '$lib/date';
+	import { toast } from 'svelte-sonner';
 
 	const agents = getAgents();
 	const sessions = getAllSessions();
@@ -31,7 +32,11 @@
 		const trimmed = prompt.trim();
 
 		const session = await createSession({ agentId, name: trimmed.slice(0, 60), model });
-		await runAgent({ sessionId: session.id, prompt: trimmed });
+		try {
+			await runAgent({ sessionId: session.id, prompt: trimmed });
+		} catch {
+			toast.error('Failed to send message');
+		}
 		await goto(resolve(`/chat/${session.id}`));
 	}
 
