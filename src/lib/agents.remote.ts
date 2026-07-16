@@ -1,4 +1,5 @@
 import { query, command, form } from '$app/server';
+import { error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { agentSubagents, agentTools, agents, sessions } from '$lib/server/db/schema';
 import { insertSessionSchema } from '$lib/server/db/schemas';
@@ -18,7 +19,9 @@ export const getAgentById = query(v.pipe(v.string(), v.uuid()), async (id) => {
 		where: eq(agents.id, id),
 		with: { agentTools: true, subagents: true }
 	});
-	if (!agent) throw new Error('Agent not found');
+	if (!agent) {
+		error(404, 'Agent not found');
+	}
 	const { agentTools: assignedTools, subagents: assignedSubagents, ...rest } = agent;
 	return {
 		...rest,
@@ -74,7 +77,9 @@ export const getAssignableSubagents = query(
 /** Returns all sessions for the given agent. */
 export const getAgentSessions = query(v.pipe(v.string(), v.uuid()), async (agentId) => {
 	const agent = await db.query.agents.findFirst({ where: eq(agents.id, agentId) });
-	if (!agent) throw new Error('Agent not found');
+	if (!agent) {
+		error(404, 'Agent not found');
+	}
 	return db.select().from(sessions).where(eq(sessions.agentId, agentId));
 });
 
@@ -144,7 +149,7 @@ export const saveAgent = form(
 					.where(eq(agents.id, id))
 					.returning();
 				if (!agent) {
-					throw new Error('Agent not found');
+					error(404, 'Agent not found');
 				}
 				await tx.delete(agentTools).where(eq(agentTools.agentId, id));
 				await tx.delete(agentSubagents).where(eq(agentSubagents.agentId, id));
@@ -153,14 +158,16 @@ export const saveAgent = form(
 			}
 
 			if (toolIds.length > 0) {
-				await tx.insert(agentTools).values(toolIds.map((toolId) => ({ agentId: agent.id, toolId })));
+				await tx
+					.insert(agentTools)
+					.values(toolIds.map((toolId) => ({ agentId: agent.id, toolId })));
 			}
 
 			if (subagentIds.length > 0) {
 				const ancestors = await computeAncestorIds(agent.id);
 				const invalid = subagentIds.filter((sid) => sid === agent.id || ancestors.has(sid));
 				if (invalid.length > 0) {
-					throw new Error('Cannot assign a subagent that would create a cycle');
+					error(400, 'Cannot assign a subagent that would create a cycle');
 				}
 				await tx
 					.insert(agentSubagents)

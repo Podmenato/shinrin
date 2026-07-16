@@ -1,4 +1,5 @@
 import { command, query } from '$app/server';
+import { error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { messages, sessions } from '$lib/server/db/schema';
 import { asc, eq } from 'drizzle-orm';
@@ -13,7 +14,9 @@ export const getSession = query(v.pipe(v.string(), v.uuid()), async (sessionId) 
 		where: eq(sessions.id, sessionId),
 		with: { agent: true }
 	});
-	if (!session) throw new Error('Session not found');
+	if (!session) {
+		error(404, 'Session not found');
+	}
 	return session;
 });
 
@@ -65,7 +68,9 @@ export const getStreamingReply = query.live(v.pipe(v.string(), v.uuid()), (sessi
 /** Runs the agent for the given session with the provided prompt. */
 export const runAgent = command(runSchema, async ({ sessionId, prompt }) => {
 	const session = await db.query.sessions.findFirst({ where: eq(sessions.id, sessionId) });
-	if (!session) throw new Error('Session not found');
+	if (!session) {
+		error(404, 'Session not found');
+	}
 
 	// TODO: make provider independent
 	const provider = new OllamaProvider(session.model);

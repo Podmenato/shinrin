@@ -7,7 +7,8 @@ progress, mistake logs).
 
 ## Stack
 
-- SvelteKit 2 (Svelte 5, runes mode, remote functions enabled), TypeScript, Tailwind 4
+- SvelteKit 3 (prerelease — see "SvelteKit 3" section below), Svelte 5 (runes mode,
+  remote functions enabled), TypeScript, Tailwind 4
 - Postgres via `drizzle-orm`/`postgres-js`, schema in [src/lib/server/db/schema.ts](src/lib/server/db/schema.ts)
 - Ollama as the model provider (local, `http://localhost:11434`)
 - Anki access via AnkiConnect (tools under `src/lib/server/tools/anki/`)
@@ -89,9 +90,10 @@ progress, mistake logs).
   [agents.remote.ts](src/lib/agents.remote.ts),
   [sessions.remote.ts](src/lib/sessions.remote.ts)), called directly from
   `.svelte` files (`{#each await getAgents() as ...}`), **not** the
-  traditional `+page.server.ts` `load` function. `kit.experimental.remoteFunctions`
-  is enabled in [svelte.config.js](svelte.config.js) for this. Don't add a
-  `load` function out of habit — check for a `.remote.ts` file first.
+  traditional `+page.server.ts` `load` function. `experimental.remoteFunctions`
+  is enabled in the `sveltekit(...)` plugin call in [vite.config.ts](vite.config.ts)
+  (see "SvelteKit 3" section below for why it's not in a `svelte.config.js`). Don't
+  add a `load` function out of habit — check for a `.remote.ts` file first.
 - `src/routes/ollama/` — Ollama admin page (downloaded/running models, stop a
   running model). Talks to the local Ollama daemon directly via
   [src/lib/server/ollamaAdmin.ts](src/lib/server/ollamaAdmin.ts) — intentionally
@@ -171,6 +173,67 @@ progress, mistake logs).
   `.find()` genuinely returns `undefined` on no match, so `??` is correct
   *there*, just not against the raw bound value.
 
+## SvelteKit 3
+
+Running `@sveltejs/kit@3.0.0-next.8` + `@sveltejs/adapter-node@6.0.0-next.3` — a
+deliberate, early jump onto the prerelease line, not an accident. Both are pinned to
+an **exact** version in `package.json` (no `^`) on purpose: bumping across `next.*`
+releases should stay a one-at-a-time, deliberate action, not something a routine
+`pnpm install` does silently. When bumping, check the actual
+[CHANGELOG.md](https://github.com/sveltejs/kit/blob/version-3/packages/kit/CHANGELOG.md)
+(note: the repo's default branch is `version-3`, not `main`) for breaking changes
+rather than assuming — kit3 has been shedding a lot of long-deprecated APIs release
+to release.
+
+- **No `svelte.config.js`/`.ts`** — kit3 throws on startup (`... is no longer used`)
+  if either file exists at all. All config (`adapter`, `experimental`, `typescript`,
+  `alias`, `compilerOptions`, ...) now goes through the `sveltekit(...)` Vite plugin
+  call in [vite.config.ts](vite.config.ts), with the old `kit.*` fields passed as
+  flat top-level properties instead of nested under `kit:`. The shared
+  `compilerOptions` (the `runes` function + `experimental.async`) live in
+  [svelte.compiler-options.js](svelte.compiler-options.js) instead, since
+  `eslint.config.js` also needs them (`eslint-plugin-svelte`'s `svelteConfig` parser
+  option) and can no longer import them from `svelte.config.js` either.
+- **Env vars are now explicit, not dynamic** — `$env/dynamic/private`,
+  `$env/static/private`, etc. are gone (removed from the shipped types entirely, so
+  this fails at the TypeScript level, not just at runtime). Declare each var your
+  app actually uses in [src/env.ts](src/env.ts) via `defineEnvVars` (from
+  `@sveltejs/kit/hooks`), then import the specific named export from
+  `$app/env/private` (server-only) or `$app/env/public` — see
+  [src/lib/server/db/index.ts](src/lib/server/db/index.ts) for the pattern. Only
+  vars actually listed in `src/env.ts` exist as exports; nothing free-form. Values
+  still come from `.env.[mode]` the same way as before — this only changes how you
+  declare/import them, not where the values live.
+- **`+error.svelte` reads `error` as a component prop now, not `page.error`** — kit3
+  generates a per-route `ErrorProps = { error: App.Error }` type (from `./$types`),
+  and the auto-inserted `<svelte:boundary>` passes the caught error down as a prop
+  (`<Error {error} />`), not via the `page` store. `page.error` (`$app/state`)
+  reflects the classic `load`-error path and is **not** reliably updated for
+  render-time errors caught by a boundary (e.g. a remote function's `error(...)`
+  thrown inside `$derived(await ...)`) — using it there is stale/wrong, not just a
+  style choice. Do `let { error }: ErrorProps = $props();` and use `error.message`
+  directly; see any of the `+error.svelte` files for the pattern.
+- **Known upstream bug: error boundaries don't cleanly reset on client-side
+  navigation** — [sveltejs/kit#16207](https://github.com/sveltejs/kit/issues/16207),
+  root-caused in draft PR
+  [#16227](https://github.com/sveltejs/kit/pull/16227). kit3 auto-wraps every route
+  that has an `+error.svelte` in a `<svelte:boundary>`, but it's the same boundary
+  instance reused across every navigation at that depth, not recreated per route.
+  Two bugs compound: Svelte's own `Boundary` class doesn't destroy its previous
+  `#main_effect`/`#failed_effect` when the block effect re-runs (any navigation
+  triggers this), and there's a race in SvelteKit's async `transformError` step
+  where the boundary can re-render *before* the previous error's transform promise
+  resolves, attaching a stale failed-state effect to whatever route you've since
+  navigated to. Net effect: once any boundary anywhere has failed once, its old
+  error can spuriously reappear on a later, completely unrelated, successful
+  navigation — until a hard reload rebuilds the app fresh. Not fixable from app
+  code (it's in Svelte's `Boundary` class + kit's error-transform pipeline).
+  **Workaround**: [error-empty-state.svelte](src/lib/components/error-empty-state.svelte)'s
+  recovery link uses `data-sveltekit-reload="true"` to force a real full-page
+  navigation instead of client-side routing, which sidesteps the bug entirely (a
+  fresh app instance has no stale boundary state). Remove that attribute + this note
+  once upstream ships a real fix.
+
 ## UI / components
 
 - Component library is **shadcn-svelte** (built on `bits-ui`). Installed
@@ -234,4 +297,5 @@ progress, mistake logs).
 - [src/lib/server/env.ts](src/lib/server/env.ts) — `loadEnv(mode)` loads the
   right `.env.[mode]` file for anything that runs outside Vite (drizzle
   configs, seed, clean, `scripts/dev.ts`). SvelteKit's own dev/build/preview
-  don't need it — Vite already loads `.env.[mode]` for `$env/dynamic/private`.
+  don't need it — Vite already loads `.env.[mode]` for the app's own env vars (see
+  "SvelteKit 3" section above for how those are declared/imported now).

@@ -18,7 +18,7 @@
 	let { params }: { params: { sessionId: string } } = $props();
 	const { sessionId } = $derived(params);
 
-	const session = $derived(getSession(sessionId));
+	const session = $derived(await getSession(sessionId));
 	const sessionMessages = $derived(getSessionMessages(sessionId));
 	const streamingReply = $derived(getStreamingReply(sessionId));
 
@@ -66,17 +66,17 @@
 			<ArrowLeftIcon class="size-4" />
 			Back to chat
 		</a>
-		{#if session.current}
+		{#if session}
 			<div class="flex items-center gap-2">
-				<Badge variant="secondary">{session.current.agent.name}</Badge>
-				<Badge variant="outline">{session.current.model}</Badge>
+				<Badge variant="secondary">{session.agent.name}</Badge>
+				<Badge variant="outline">{session.model}</Badge>
 			</div>
 		{/if}
 	</div>
 
 	<Card.Root>
 		<Card.Header>
-			<Card.Title>{session.current?.name ?? 'Conversation'}</Card.Title>
+			<Card.Title>{session?.name ?? 'Conversation'}</Card.Title>
 		</Card.Header>
 		<Card.Content class="flex flex-col gap-4">
 			<ScrollArea class="h-[60vh] rounded-md border p-4">
