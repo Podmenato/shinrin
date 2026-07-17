@@ -9,7 +9,7 @@
 	type Mistake = Awaited<ReturnType<typeof getAllMistakes>>[number];
 
 	const columns: DataTableColumn<Mistake>[] = [
-		{ name: 'Agent', width: 'w-40', cell: (mistake) => mistake.agentName },
+		{ name: 'Subject', width: 'w-40', cell: (mistake) => mistake.subjectName },
 		{ name: 'Title', cell: (mistake) => mistake.title },
 		{ name: 'Observed', width: 'w-40', cell: (mistake) => formatDateTime(mistake.createdAt) }
 	];

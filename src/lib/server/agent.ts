@@ -40,7 +40,7 @@ export class Agent {
 
 		const tools = getTools(
 			agent.agentTools.map((at) => at.tool.name),
-			{ agentId }
+			{ agentId, subjectId: agent.subjectId }
 		);
 		const subagentTools = await getSubagentTools(agentId, model);
 
@@ -64,7 +64,7 @@ export class Agent {
 		const agentId = session.agent.id;
 		const tools = getTools(
 			session.agent.agentTools.map((at) => at.tool.name),
-			{ agentId }
+			{ agentId, subjectId: session.agent.subjectId }
 		);
 		const subagentTools = await getSubagentTools(agentId, session.model);
 

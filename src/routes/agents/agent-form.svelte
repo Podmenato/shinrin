@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { saveAgent, getAssignableSubagents, type Agent } from '$lib/agents.remote';
 	import { getTools } from '$lib/tools.remote';
+	import { getSubjects } from '$lib/subjects.remote';
 	import { getAvailableModels } from '$lib/ollamaAdmin.remote';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Field from '$lib/components/ui/field/index.js';
@@ -18,11 +19,12 @@
 	import { formatDateTime } from '$lib/date';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { isHttpError } from '@sveltejs/kit';
 
 	const { agent }: { agent?: Agent & { toolIds: string[]; subagentIds: string[] } } = $props();
 
 	const allTools = $derived(await getTools());
-	const assignableSubagents = $derived(await getAssignableSubagents(agent?.id ?? null));
+	const allSubjects = $derived(await getSubjects());
 	const availableModels = $derived(await getAvailableModels());
 
 	let toolsOpen = $state(false);
@@ -30,23 +32,42 @@
 
 	let isSubagent = $derived(agent?.isSubagent ?? false);
 	let defaultModel = $derived(agent?.defaultModel ?? '');
+	let subjectId = $derived(agent?.subjectId ?? '');
 	const modelTriggerContent = $derived(
 		availableModels.find((m) => m.model === defaultModel)?.model ?? 'Use the calling agent’s model'
+	);
+	const subjectTriggerContent = $derived(
+		allSubjects.find((s) => s.id === subjectId)?.name ?? 'No subject'
+	);
+
+	const assignableSubagents = $derived(
+		await getAssignableSubagents({
+			agentId: agent?.id ?? null,
+			subjectId: subjectId.trim() === '' ? null : subjectId
+		})
+	);
+
+	const assignableTools = $derived(
+		subjectId.trim() === '' ? allTools.filter((t) => !t.isSubjectRequired) : allTools
 	);
 
 	const agentForm = $derived(agent ? saveAgent.for(agent.id) : saveAgent);
 	const submitForm = $derived(
 		agentForm.enhance(async (form) => {
-			const success = await form.submit();
-			if (success) {
-				if (agent) {
-					toast.success('Agent saved');
+			try {
+				const success = await form.submit();
+				if (success) {
+					if (agent) {
+						toast.success('Agent saved');
+					} else {
+						toast.success('Agent created');
+						await goto(resolve(`/agents/${form.result?.id}`));
+					}
 				} else {
-					toast.success('Agent created');
-					await goto(resolve(`/agents/${form.result?.id}`));
+					toast.error('Saving failed');
 				}
-			} else {
-				toast.error('Saving failed');
+			} catch (e) {
+				toast.error(isHttpError(e) ? e.body.message : 'Saving failed');
 			}
 		})
 	);
@@ -73,6 +94,22 @@
 				<Field.Label for="name">Name</Field.Label>
 				<Input id="name" {...agentForm.fields.name.as('text', agent?.name ?? '')} />
 				<Field.Error errors={agentForm.fields.name.issues()} />
+			</Field.Field>
+
+			<Field.Field>
+				<Field.Label for="subjectId">Subject</Field.Label>
+				<Select.Root type="single" name="subjectId" bind:value={subjectId}>
+					<Select.Trigger id="subjectId" class="w-full">
+						{subjectTriggerContent}
+					</Select.Trigger>
+					<Select.Content>
+						<Select.Item value="" label="No subject" />
+						{#each allSubjects as subject (subject.id)}
+							<Select.Item value={subject.id} label={subject.name} />
+						{/each}
+					</Select.Content>
+				</Select.Root>
+				<Field.Error errors={agentForm.fields.subjectId.issues()} />
 			</Field.Field>
 
 			<Field.Field>
@@ -130,7 +167,7 @@
 					<Collapsible.Content>
 						<ScrollArea class="mt-3 h-48 rounded-md border p-3">
 							<div data-slot="checkbox-group" class="flex flex-col gap-3">
-								{#each allTools as tool (tool.id)}
+								{#each assignableTools as tool (tool.id)}
 									<Field.Field orientation="horizontal">
 										<Checkbox
 											id="tool-{tool.id}"

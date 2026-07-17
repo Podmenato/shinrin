@@ -1,15 +1,16 @@
 import type { Tool, ToolDefinition } from './tool';
+import { ToolError } from './tool';
 import { db } from '../db/index';
 import { mistakeObservations } from '../db/schema';
 
-export class LogMistakeTool implements Tool {
+export class CreateMistakeTool implements Tool {
 	definition: ToolDefinition;
-	private agentId: string;
+	private subjectId: string | null;
 
-	constructor(agentId: string) {
-		this.agentId = agentId;
+	constructor(subjectId: string | null) {
+		this.subjectId = subjectId;
 		this.definition = {
-			name: 'log_mistake',
+			name: 'create_mistake',
 			description:
 				'Record an observation of a mistake the user made. Just log what happened, in plain language — do not worry about whether a similar mistake was logged before, that gets consolidated separately later.',
 			parameters: [
@@ -34,7 +35,11 @@ export class LogMistakeTool implements Tool {
 		const title = args.title as string;
 		const note = args.note as string;
 
-		await db.insert(mistakeObservations).values({ agentId: this.agentId, title, note });
+		if (!this.subjectId) {
+			throw new ToolError('This agent has no subject, so it cannot create mistakes.');
+		}
+
+		await db.insert(mistakeObservations).values({ subjectId: this.subjectId, title, note });
 
 		return 'Mistake logged.';
 	}

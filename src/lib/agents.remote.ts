@@ -1,9 +1,9 @@
 import { query, command, form } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { agentSubagents, agentTools, agents, sessions } from '$lib/server/db/schema';
+import { agentSubagents, agentTools, agents, sessions, tools } from '$lib/server/db/schema';
 import { insertSessionSchema } from '$lib/server/db/schemas';
-import { and, desc, eq, isNull, type InferSelectModel } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
 
 /** Returns all non-deleted agents. */
@@ -12,6 +12,24 @@ export const getAgents = query(async () => {
 });
 
 export type Agent = InferSelectModel<typeof agents>;
+
+/**
+ * Returns non-deleted agents usable for `subjectId` — agents tied to that exact subject, plus
+ * subject-less agents (treated as universal, same rule as subagent assignment). Pass `null` for
+ * an unscoped subject/topic, which fits any agent.
+ */
+export const getAgentsForSubject = query(
+	v.nullable(v.pipe(v.string(), v.uuid())),
+	async (subjectId) => {
+		const candidates = await db.select().from(agents).where(isNull(agents.deletedAt));
+
+		if (!subjectId) {
+			return candidates;
+		}
+
+		return candidates.filter((a) => a.subjectId === null || a.subjectId === subjectId);
+	}
+);
 
 /** Returns a single agent by id, along with the ids of its assigned tools and subagents. */
 export const getAgentById = query(v.pipe(v.string(), v.uuid()), async (id) => {
@@ -59,18 +77,30 @@ async function computeAncestorIds(agentId: string): Promise<Set<string>> {
 
 /**
  * Returns agents flagged `isSubagent` that can be assigned to `agentId` without creating a
- * cycle. Pass `null` for a not-yet-created agent, since it can't be anyone's ancestor yet.
+ * cycle, and whose subject doesn't conflict with `subjectId` (a subject-tied subagent can only
+ * go to a parent with the same subject, or no subject; a subject-less subagent fits anywhere).
+ * Pass `agentId: null` for a not-yet-created agent, since it can't be anyone's ancestor yet.
  */
 export const getAssignableSubagents = query(
-	v.nullable(v.pipe(v.string(), v.uuid())),
-	async (agentId) => {
+	v.object({
+		agentId: v.nullable(v.pipe(v.string(), v.uuid())),
+		subjectId: v.nullable(v.pipe(v.string(), v.uuid()))
+	}),
+	async ({ agentId, subjectId }) => {
 		const candidates = await db
 			.select()
 			.from(agents)
 			.where(and(eq(agents.isSubagent, true), isNull(agents.deletedAt)));
-		if (!agentId) return candidates;
+		const subjectMatched = candidates.filter(
+			(c) => c.subjectId === null || subjectId === null || c.subjectId === subjectId
+		);
+
+		if (!agentId) {
+			return subjectMatched;
+		}
+
 		const ancestors = await computeAncestorIds(agentId);
-		return candidates.filter((c) => c.id !== agentId && !ancestors.has(c.id));
+		return subjectMatched.filter((c) => c.id !== agentId && !ancestors.has(c.id));
 	}
 );
 
@@ -112,7 +142,7 @@ export const createSession = command(
 	}
 );
 
-/** Creates or updates an agent's name, system prompt, and assigned tools. */
+/** Creates or updates an agent's name, system prompt, subject, and assigned tools. */
 export const saveAgent = form(
 	v.object({
 		id: v.optional(v.pipe(v.string(), v.uuid())),
@@ -121,6 +151,7 @@ export const saveAgent = form(
 		isSubagent: v.optional(v.boolean(), false),
 		subagentDescription: v.optional(v.string(), ''),
 		defaultModel: v.optional(v.string(), ''),
+		subjectId: v.optional(v.string(), ''),
 		toolIds: v.optional(v.array(v.pipe(v.string(), v.uuid())), []),
 		subagentIds: v.optional(v.array(v.pipe(v.string(), v.uuid())), [])
 	}),
@@ -131,6 +162,7 @@ export const saveAgent = form(
 		isSubagent,
 		subagentDescription,
 		defaultModel,
+		subjectId,
 		toolIds,
 		subagentIds
 	}) => {
@@ -141,7 +173,8 @@ export const saveAgent = form(
 				isSubagent,
 				subagentDescription:
 					isSubagent && subagentDescription.trim() !== '' ? subagentDescription : null,
-				defaultModel: isSubagent && defaultModel.trim() !== '' ? defaultModel : null
+				defaultModel: isSubagent && defaultModel.trim() !== '' ? defaultModel : null,
+				subjectId: subjectId.trim() === '' ? null : subjectId
 			};
 
 			let agent;
@@ -161,6 +194,14 @@ export const saveAgent = form(
 			}
 
 			if (toolIds.length > 0) {
+				if (!agent.subjectId) {
+					const selectedTools = await tx.select().from(tools).where(inArray(tools.id, toolIds));
+					const requiresSubject = selectedTools.some((t) => t.isSubjectRequired);
+					if (requiresSubject) {
+						error(400, 'Cannot assign a subject-required tool to an agent with no subject');
+					}
+				}
+
 				await tx
 					.insert(agentTools)
 					.values(toolIds.map((toolId) => ({ agentId: agent.id, toolId })));
@@ -172,6 +213,19 @@ export const saveAgent = form(
 				if (invalid.length > 0) {
 					error(400, 'Cannot assign a subagent that would create a cycle');
 				}
+
+				const candidateSubagents = await tx
+					.select()
+					.from(agents)
+					.where(inArray(agents.id, subagentIds));
+				const subjectMismatch = candidateSubagents.some(
+					(sa) =>
+						sa.subjectId !== null && agent.subjectId !== null && sa.subjectId !== agent.subjectId
+				);
+				if (subjectMismatch) {
+					error(400, 'Cannot assign a subagent whose subject does not match');
+				}
+
 				await tx
 					.insert(agentSubagents)
 					.values(subagentIds.map((subagentId) => ({ agentId: agent.id, subagentId })));

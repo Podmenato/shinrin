@@ -25,8 +25,8 @@ const db = drizzle(client, { schema });
 const MEMORY_RULES =
 	'You have three separate ways to remember things across sessions — use the right one:\n' +
 	'  save_memory — stable facts and preferences about the user (e.g. level, teaching style). Check existing memories already in your context before picking a key.\n' +
-	'  update_topic_progress — the learning status of a specific grammar point, vocab set, etc. Check existing topics in your context before naming a new one.\n' +
-	'  log_mistake — a plain-language note every time the user makes a mistake worth tracking. Just log it; do not worry about duplicates, that gets consolidated separately later.\n' +
+	'  create_topic / update_topic — the learning status of a specific grammar point, vocab set, etc. Check existing topics in your context before creating a new one — create_topic fails if one with that name already exists, use update_topic instead.\n' +
+	'  create_mistake / update_mistake — a plain-language note every time the user makes a mistake worth tracking. Just log it with create_mistake; do not worry about duplicates, that gets consolidated separately later.\n' +
 	'\n';
 
 const SHARED_RULES =
@@ -85,10 +85,31 @@ const ANKI_SUBAGENT_DESCRIPTION =
 	'Returns only the requested data or a short confirmation; it will not ask clarifying questions back.';
 
 await db
+	.insert(subjects)
+	.values([
+		{ name: 'Japanese', description: 'Japanese language study.' },
+		{ name: 'English', description: 'English language study.' },
+		{ name: 'Mandarin', description: 'Mandarin Chinese language study.' },
+		{ name: 'German', description: 'German language study.' }
+	])
+	.onConflictDoNothing();
+
+const allSubjects = await db.select().from(subjects);
+const subjectsByName = new Map(allSubjects.map((s) => [s.name, s]));
+
+await db
 	.insert(agents)
 	.values([
-		{ name: 'Japanese', systemPrompt: JAPANESE_SYSTEM_PROMPT },
-		{ name: 'Mandarin', systemPrompt: MANDARIN_SYSTEM_PROMPT },
+		{
+			name: 'Japanese',
+			systemPrompt: JAPANESE_SYSTEM_PROMPT,
+			subjectId: subjectsByName.get('Japanese')?.id
+		},
+		{
+			name: 'Mandarin',
+			systemPrompt: MANDARIN_SYSTEM_PROMPT,
+			subjectId: subjectsByName.get('Mandarin')?.id
+		},
 		{
 			name: 'Anki',
 			systemPrompt: ANKI_SYSTEM_PROMPT,
@@ -112,18 +133,10 @@ await db
 		{ name: 'get_intervals' },
 		{ name: 'save_memory' },
 		{ name: 'delete_memory' },
-		{ name: 'update_topic_progress' },
-		{ name: 'log_mistake' }
-	])
-	.onConflictDoNothing();
-
-await db
-	.insert(subjects)
-	.values([
-		{ name: 'Japanese', description: 'Japanese language study.' },
-		{ name: 'English', description: 'English language study.' },
-		{ name: 'Mandarin', description: 'Mandarin Chinese language study.' },
-		{ name: 'German', description: 'German language study.' }
+		{ name: 'create_topic', isSubjectRequired: true },
+		{ name: 'update_topic' },
+		{ name: 'create_mistake', isSubjectRequired: true },
+		{ name: 'update_mistake' }
 	])
 	.onConflictDoNothing();
 
@@ -144,8 +157,10 @@ const LANGUAGE_AGENT_TOOL_NAMES = [
 	'current_time_tool',
 	'save_memory',
 	'delete_memory',
-	'update_topic_progress',
-	'log_mistake'
+	'create_topic',
+	'update_topic',
+	'create_mistake',
+	'update_mistake'
 ];
 
 // add_note is deliberately excluded — add_sentence_note is the preferred, less error-prone path.
@@ -206,10 +221,10 @@ const MISTAKE_NOTES: Record<string, { title: string; note: string }[]> = {
 
 await db.delete(mistakeObservations);
 await db.insert(mistakeObservations).values(
-	Object.entries(MISTAKE_NOTES).flatMap(([agentName, notes]) => {
-		const agent = agentsByName.get(agentName);
-		if (!agent) return [];
-		return notes.map(({ title, note }) => ({ agentId: agent.id, title, note }));
+	Object.entries(MISTAKE_NOTES).flatMap(([subjectName, notes]) => {
+		const subject = subjectsByName.get(subjectName);
+		if (!subject) return [];
+		return notes.map(({ title, note }) => ({ subjectId: subject.id, title, note }));
 	})
 );
 
@@ -236,11 +251,11 @@ const TOPIC_PROGRESS: Record<string, { topic: string; status: string; notes?: st
 
 await db.delete(studyTopics);
 await db.insert(studyTopics).values(
-	Object.entries(TOPIC_PROGRESS).flatMap(([agentName, topics]) => {
-		const agent = agentsByName.get(agentName);
-		if (!agent) return [];
+	Object.entries(TOPIC_PROGRESS).flatMap(([subjectName, topics]) => {
+		const subject = subjectsByName.get(subjectName);
+		if (!subject) return [];
 		return topics.map(({ topic, status, notes }) => ({
-			agentId: agent.id,
+			subjectId: subject.id,
 			topic,
 			status,
 			notes: notes ?? null

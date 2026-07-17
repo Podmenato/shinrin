@@ -17,7 +17,7 @@
 	}
 
 	const columns: DataTableColumn<Topic>[] = [
-		{ name: 'Agent', width: 'w-40', cell: (topic) => topic.agentName },
+		{ name: 'Subject', width: 'w-40', cell: (topic) => topic.subjectName },
 		{ name: 'Topic', cell: (topic) => topic.topic },
 		{
 			name: 'Status',

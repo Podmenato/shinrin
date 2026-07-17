@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { getTopicById, type Topic } from '$lib/topics.remote';
-	import { createSession } from '$lib/agents.remote';
+	import { createSession, getAgentsForSubject } from '$lib/agents.remote';
 	import { runAgent } from '$lib/sessions.remote';
 	import { getAvailableModels } from '$lib/ollamaAdmin.remote';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -22,11 +22,16 @@
 
 	const topic = $derived(await getTopicById(topicId));
 	const availableModels = $derived(await getAvailableModels());
+	const agents = $derived(await getAgentsForSubject(topic.subjectId));
 
+	let agentId = $state('');
 	let model = $state('');
 	const isStarting = $derived(createSession.pending > 0 || runAgent.pending > 0);
-	const isStartDisabled = $derived(!model || isStarting);
+	const isStartDisabled = $derived(!agentId || !model || isStarting);
 
+	const agentTriggerContent = $derived(
+		agents.find((a) => a.id === agentId)?.name ?? 'Select an agent'
+	);
 	const modelTriggerContent = $derived(
 		availableModels.find((m) => m.model === model)?.model ?? 'Select a model'
 	);
@@ -51,7 +56,7 @@
 
 		try {
 			const session = await createSession({
-				agentId: topic.agentId,
+				agentId,
 				name: `Studying: ${topic.topic}`,
 				model,
 				systemPrompt: buildStudySystemPrompt(topic)
@@ -82,7 +87,7 @@
 				<TopicStatusBadge status={topic.status} />
 			</div>
 			<Card.Description class="flex items-center gap-2">
-				<Badge variant="secondary">{topic.agentName}</Badge>
+				<Badge variant="secondary">{topic.subjectName}</Badge>
 				Updated {formatDateTime(topic.updatedAt)}
 			</Card.Description>
 		</Card.Header>
@@ -98,9 +103,8 @@
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>Study this topic</Card.Title>
-			<Card.Description>
-				Starts a new session with {topic.agentName}, primed with this topic's details.
-			</Card.Description>
+			<Card.Description>Pick an agent and model, primed with this topic's details.</Card.Description
+			>
 		</Card.Header>
 		<Card.Content>
 			<form
@@ -110,6 +114,20 @@
 					startStudying();
 				}}
 			>
+				<Field.Field class="sm:max-w-xs">
+					<Field.Label for="agent">Agent</Field.Label>
+					<Select.Root type="single" name="agentId" bind:value={agentId}>
+						<Select.Trigger id="agent" class="w-full">
+							{agentTriggerContent}
+						</Select.Trigger>
+						<Select.Content>
+							{#each agents as availableAgent (availableAgent.id)}
+								<Select.Item value={availableAgent.id} label={availableAgent.name} />
+							{/each}
+						</Select.Content>
+					</Select.Root>
+				</Field.Field>
+
 				<Field.Field class="sm:max-w-xs">
 					<Field.Label for="model">Model</Field.Label>
 					<Select.Root type="single" name="model" bind:value={model}>

@@ -5,17 +5,17 @@ import { studyTopics } from '../db/schema';
 
 const VALID_STATUSES = ['introduced', 'practicing', 'mastered'] as const;
 
-export class UpdateTopicProgressTool implements Tool {
+export class CreateTopicTool implements Tool {
 	definition: ToolDefinition;
-	private agentId: string;
+	private subjectId: string | null;
 
-	constructor(agentId: string) {
-		this.agentId = agentId;
+	constructor(subjectId: string | null) {
+		this.subjectId = subjectId;
 		this.definition = {
-			name: 'update_topic_progress',
+			name: 'create_topic',
 			description:
-				'Record or update the learning status of a specific topic (a grammar point, vocab set, etc.) for the user. ' +
-				'Check the topics already listed in your context before naming a new one — reuse an existing topic name if it covers the same thing rather than creating a near-duplicate.',
+				'Start tracking a new topic (a grammar point, vocab set, etc.) for the user. ' +
+				'Check the topics already listed in your context first — if one already covers this, use update_topic instead of creating a near-duplicate.',
 			parameters: [
 				{
 					name: 'topic',
@@ -44,19 +44,25 @@ export class UpdateTopicProgressTool implements Tool {
 		const status = args.status as string;
 		const notes = (args.notes as string | undefined) ?? null;
 
+		if (!this.subjectId) {
+			throw new ToolError('This agent has no subject, so it cannot create topics.');
+		}
+
 		if (!VALID_STATUSES.includes(status as (typeof VALID_STATUSES)[number])) {
 			throw new ToolError(`status must be one of: ${VALID_STATUSES.join(', ')}.`);
 		}
 
-		await db
+		const [created] = await db
 			.insert(studyTopics)
-			.values({ agentId: this.agentId, topic, status, notes })
-			.onConflictDoUpdate({
-				target: [studyTopics.agentId, studyTopics.topic],
-				set: { status, notes, updatedAt: new Date() }
-			});
+			.values({ subjectId: this.subjectId, topic, status, notes })
+			.onConflictDoNothing()
+			.returning();
 
-		return `Topic progress updated: "${topic}" → ${status}`;
+		if (!created) {
+			throw new ToolError(`Topic "${topic}" already exists — use update_topic instead.`);
+		}
+
+		return `Topic created: "${topic}" → ${status}`;
 	}
 
 	cancel(): Promise<string> {

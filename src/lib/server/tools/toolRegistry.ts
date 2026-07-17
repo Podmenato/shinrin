@@ -14,10 +14,12 @@ import { CardsInfoTool } from './anki/cardsInfoTool';
 import { GetIntervalsTool } from './anki/getIntervalsTool';
 import { SaveMemoryTool } from './saveMemoryTool';
 import { DeleteMemoryTool } from './deleteMemoryTool';
-import { UpdateTopicProgressTool } from './updateTopicProgressTool';
-import { LogMistakeTool } from './logMistakeTool';
+import { CreateTopicTool } from './createTopicTool';
+import { UpdateTopicTool } from './updateTopicTool';
+import { CreateMistakeTool } from './createMistakeTool';
+import { UpdateMistakeTool } from './updateMistakeTool';
 
-export type ToolContext = { agentId: string };
+export type ToolContext = { agentId: string; subjectId: string | null };
 
 const registry: Record<string, Tool> = {
 	current_time_tool: new CurrentTimeTool(),
@@ -28,14 +30,16 @@ const registry: Record<string, Tool> = {
 	get_note_types: new GetModelsTool(),
 	get_note_info: new GetNoteInfoTool(),
 	cards_info: new CardsInfoTool(),
-	get_intervals: new GetIntervalsTool()
+	get_intervals: new GetIntervalsTool(),
+	update_topic: new UpdateTopicTool(),
+	update_mistake: new UpdateMistakeTool()
 };
 
 const contextualRegistry: Record<string, (ctx: ToolContext) => Tool> = {
 	save_memory: (ctx) => new SaveMemoryTool(ctx.agentId),
 	delete_memory: (ctx) => new DeleteMemoryTool(ctx.agentId),
-	update_topic_progress: (ctx) => new UpdateTopicProgressTool(ctx.agentId),
-	log_mistake: (ctx) => new LogMistakeTool(ctx.agentId)
+	create_topic: (ctx) => new CreateTopicTool(ctx.subjectId),
+	create_mistake: (ctx) => new CreateMistakeTool(ctx.subjectId)
 };
 
 export function getTools(names: string[], ctx: ToolContext): Tool[] {

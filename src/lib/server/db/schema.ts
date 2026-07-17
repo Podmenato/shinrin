@@ -11,6 +11,14 @@ import {
 	uuid
 } from 'drizzle-orm/pg-core';
 
+export const subjects = pgTable('subjects', {
+	id: uuid().primaryKey().defaultRandom(),
+	name: text().notNull().unique(),
+	description: text(),
+	createdAt: timestamp('created_at').defaultNow().notNull(),
+	updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
 export const agents = pgTable('agents', {
 	id: uuid().primaryKey().defaultRandom(),
 	name: text().notNull().unique(),
@@ -18,6 +26,7 @@ export const agents = pgTable('agents', {
 	isSubagent: boolean('is_subagent').notNull().default(false),
 	subagentDescription: text('subagent_description'),
 	defaultModel: text('default_model'),
+	subjectId: uuid('subject_id').references(() => subjects.id),
 	deletedAt: timestamp('deleted_at'),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
 	updatedAt: timestamp('updated_at').defaultNow().notNull()
@@ -26,14 +35,7 @@ export const agents = pgTable('agents', {
 export const tools = pgTable('tools', {
 	id: uuid().primaryKey().defaultRandom(),
 	name: text().notNull().unique(),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-	updatedAt: timestamp('updated_at').defaultNow().notNull()
-});
-
-export const subjects = pgTable('subjects', {
-	id: uuid().primaryKey().defaultRandom(),
-	name: text().notNull().unique(),
-	description: text(),
+	isSubjectRequired: boolean('is_subject_required').notNull().default(false),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
 	updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
@@ -122,29 +124,36 @@ export const studyTopics = pgTable(
 	'study_topics',
 	{
 		id: uuid().primaryKey().defaultRandom(),
-		agentId: uuid('agent_id')
+		subjectId: uuid('subject_id')
 			.notNull()
-			.references(() => agents.id),
+			.references(() => subjects.id),
 		topic: text('topic').notNull(),
 		status: text('status').notNull(),
 		notes: text('notes'),
 		createdAt: timestamp('created_at').defaultNow().notNull(),
 		updatedAt: timestamp('updated_at').defaultNow().notNull()
 	},
-	(t) => [unique().on(t.agentId, t.topic)]
+	(t) => [unique().on(t.subjectId, t.topic)]
 );
 
 export const mistakeObservations = pgTable('mistake_observations', {
 	id: uuid().primaryKey().defaultRandom(),
-	agentId: uuid('agent_id')
+	subjectId: uuid('subject_id')
 		.notNull()
-		.references(() => agents.id),
+		.references(() => subjects.id),
 	title: text('title').notNull(),
 	note: text('note').notNull(),
 	createdAt: timestamp('created_at').defaultNow().notNull()
 });
 
-export const agentsRelations = relations(agents, ({ many }) => ({
+export const subjectsRelations = relations(subjects, ({ many }) => ({
+	agents: many(agents),
+	studyTopics: many(studyTopics),
+	mistakeObservations: many(mistakeObservations)
+}));
+
+export const agentsRelations = relations(agents, ({ one, many }) => ({
+	subject: one(subjects, { fields: [agents.subjectId], references: [subjects.id] }),
 	agentTools: many(agentTools),
 	sessions: many(sessions),
 	subagents: many(agentSubagents, { relationName: 'parent' }),
@@ -193,9 +202,9 @@ export const memoriesRelations = relations(memories, ({ one }) => ({
 }));
 
 export const studyTopicsRelations = relations(studyTopics, ({ one }) => ({
-	agent: one(agents, { fields: [studyTopics.agentId], references: [agents.id] })
+	subject: one(subjects, { fields: [studyTopics.subjectId], references: [subjects.id] })
 }));
 
 export const mistakeObservationsRelations = relations(mistakeObservations, ({ one }) => ({
-	agent: one(agents, { fields: [mistakeObservations.agentId], references: [agents.id] })
+	subject: one(subjects, { fields: [mistakeObservations.subjectId], references: [subjects.id] })
 }));
