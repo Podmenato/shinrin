@@ -27,12 +27,15 @@ progress, mistake logs).
   `ModelProvider` interface; `OllamaProvider` is the current implementation.
 - [src/lib/server/tools/toolRegistry.ts](src/lib/server/tools/toolRegistry.ts) —
   maps tool names (as stored in the `tools` DB table / an agent's
-  `agent_tools`) to `Tool` implementations. Some tools are contextual
-  (need `agentId`), e.g. memory/progress/mistake tools.
+  `agent_tools`) to `Tool` implementations. Some tools are contextual (need
+  `agentId` and/or `subjectId` from `ToolContext`), e.g. memory tools
+  (`agentId` only) and `create_topic`/`create_mistake` (`subjectId`, required
+  — see "Subjects" below).
 - DB rows drive config: an `agents` row defines a system prompt and which
   tools it has (via `agent_tools`); a `sessions` row is one conversation
-  with a chosen model; `memories` / `study_topics` / `mistake_observations`
-  are per-agent persistent state the agent writes to itself via tools.
+  with a chosen model; `memories` is per-agent persistent state; `study_topics`
+  / `mistake_observations` are per-*subject* (not per-agent — see "Subjects"
+  below) persistent state the agent writes to itself via tools.
 - [src/lib/server/db/seed.ts](src/lib/server/db/seed.ts) currently seeds two
   example agents (Japanese, Mandarin language tutors) with prompts and tool
   assignments — this is example/dev content, not fixed product config.
@@ -50,6 +53,27 @@ progress, mistake logs).
   model the calling agent is using. Nested runs are not specially persisted —
   they show up as an ordinary tool call/result on the parent, same as any
   other tool.
+- **Subjects**: `subjects` (name + description, see
+  [src/lib/subjects.remote.ts](src/lib/subjects.remote.ts) and
+  `src/routes/subjects/`) is the ownership/routing key for `study_topics` and
+  `mistake_observations` — both have a `subjectId` FK (`NOT NULL`), not an
+  `agentId` FK. `agents.subjectId` is a *nullable* FK, many-to-one: several
+  agent "personas" for the same language (e.g. a grammar-focused agent and an
+  easier/beginner one) can share one subject and therefore one progress/
+  mistake pool, instead of fragmenting it per agent. A subject-less agent is
+  a "universal" agent (e.g. Anki) — not tied to one language. Topic/mistake
+  tools are split into `create_*`/`update_*` pairs:
+  `create_topic`/`create_mistake` require a subject to file the new row under,
+  so `tools.isSubjectRequired` (a boolean column) gates their assignment both
+  client-side ([agent-form.svelte](src/routes/agents/agent-form.svelte) hides
+  them from the tool checklist when no subject is picked) and server-side
+  (`saveAgent` in [agents.remote.ts](src/lib/agents.remote.ts) rejects the
+  save). `update_topic`/`update_mistake` take a bare `id` (uuid) with no name
+  lookup — there is currently no mechanism for the calling agent to obtain
+  that id; this is a deliberate first pass, not a bug, pending further design.
+  Assigning a subagent is also subject-gated: a subject-tied subagent can only
+  go to a parent with the same subject or no subject (`getAssignableSubagents`,
+  re-validated in `saveAgent`).
 
 ## Routes
 
