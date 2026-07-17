@@ -63,6 +63,7 @@ export const sessions = pgTable('sessions', {
 		.references(() => agents.id),
 	name: text().notNull(),
 	model: text().notNull(),
+	systemPrompt: text('system_prompt'),
 	summary: text('summary'),
 	summarizedThroughMessageId: uuid('summarized_through_message_id').references(
 		(): AnyPgColumn => messages.id

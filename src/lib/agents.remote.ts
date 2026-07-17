@@ -101,9 +101,12 @@ export const getAllSessions = query(async () => {
 
 /** Creates a new session for the given agent. */
 export const createSession = command(
-	v.pick(insertSessionSchema, ['agentId', 'name', 'model']),
-	async ({ agentId, name, model }) => {
-		const [session] = await db.insert(sessions).values({ agentId, name, model }).returning();
+	v.pick(insertSessionSchema, ['agentId', 'name', 'model', 'systemPrompt']),
+	async ({ agentId, name, model, systemPrompt }) => {
+		const [session] = await db
+			.insert(sessions)
+			.values({ agentId, name, model, systemPrompt })
+			.returning();
 		await getAllSessions().refresh();
 		return session;
 	}

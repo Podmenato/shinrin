@@ -68,7 +68,10 @@ export class Agent {
 		);
 		const subagentTools = await getSubagentTools(agentId, session.model);
 
-		const contextManager = new ContextManager(session.agent.systemPrompt ?? '', session.id);
+		const systemPrompt = [session.agent.systemPrompt, session.systemPrompt]
+			.filter((prompt) => prompt !== null && prompt.trim() !== '')
+			.join('\n\n');
+		const contextManager = new ContextManager(systemPrompt, session.id);
 		await contextManager.load();
 
 		return new Agent(agentId, modelProvider, contextManager, [...tools, ...subagentTools]);

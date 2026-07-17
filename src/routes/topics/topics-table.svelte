@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { getAllTopics } from '$lib/topics.remote';
+	import { getAllTopics, type Topic } from '$lib/topics.remote';
 	import DataTable, {
 		renderComponent,
 		type DataTableColumn
@@ -11,8 +11,6 @@
 	import { formatDateTime } from '$lib/date';
 
 	const topics = getAllTopics();
-
-	type Topic = Awaited<ReturnType<typeof getAllTopics>>[number];
 
 	function openTopic(topic: Topic) {
 		goto(resolve(`/topics/${topic.id}`));
