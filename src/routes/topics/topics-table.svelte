@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { getAllTopics } from '$lib/topics.remote';
 	import DataTable, {
 		renderComponent,
@@ -11,6 +13,10 @@
 	const topics = getAllTopics();
 
 	type Topic = Awaited<ReturnType<typeof getAllTopics>>[number];
+
+	function openTopic(topic: Topic) {
+		goto(resolve(`/topics/${topic.id}`));
+	}
 
 	const columns: DataTableColumn<Topic>[] = [
 		{ name: 'Agent', width: 'w-40', cell: (topic) => topic.agentName },
@@ -32,4 +38,5 @@
 	Icon={BookOpenIcon}
 	emptyTitle="No topics tracked yet"
 	emptyDesc="Topics are logged by agents as they track your learning progress."
+	onRowClick={openTopic}
 />
