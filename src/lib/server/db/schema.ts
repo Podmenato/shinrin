@@ -30,6 +30,14 @@ export const tools = pgTable('tools', {
 	updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
 
+export const subjects = pgTable('subjects', {
+	id: uuid().primaryKey().defaultRandom(),
+	name: text().notNull().unique(),
+	description: text(),
+	createdAt: timestamp('created_at').defaultNow().notNull(),
+	updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
 export const agentTools = pgTable(
 	'agent_tools',
 	{

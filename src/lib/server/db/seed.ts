@@ -9,6 +9,7 @@ import {
 	mistakeObservations,
 	sessions,
 	studyTopics,
+	subjects,
 	tools
 } from './schema';
 import { currentMode, loadEnv } from '../env';
@@ -113,6 +114,16 @@ await db
 		{ name: 'delete_memory' },
 		{ name: 'update_topic_progress' },
 		{ name: 'log_mistake' }
+	])
+	.onConflictDoNothing();
+
+await db
+	.insert(subjects)
+	.values([
+		{ name: 'Japanese', description: 'Japanese language study.' },
+		{ name: 'English', description: 'English language study.' },
+		{ name: 'Mandarin', description: 'Mandarin Chinese language study.' },
+		{ name: 'German', description: 'German language study.' }
 	])
 	.onConflictDoNothing();
 
@@ -328,6 +339,6 @@ for (const [agentName, sessionSeeds] of Object.entries(SESSION_SEEDS)) {
 }
 
 console.log(
-	'Seeded agents, tools, agent_tools, agent_subagents, mistake_observations, study_topics, sessions and messages.'
+	'Seeded agents, tools, subjects, agent_tools, agent_subagents, mistake_observations, study_topics, sessions and messages.'
 );
 await client.end();

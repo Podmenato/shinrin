@@ -6,7 +6,8 @@ import {
 	memories,
 	studyTopics,
 	mistakeObservations,
-	tools
+	tools,
+	subjects
 } from './schema';
 import * as v from 'valibot';
 
@@ -33,3 +34,6 @@ export const insertMistakeObservationSchema = createInsertSchema(mistakeObservat
 });
 
 export const insertToolSchema = createInsertSchema(tools, { id: uuid });
+
+export const insertSubjectSchema = createInsertSchema(subjects, { id: uuid });
+export const selectSubjectSchema = createSelectSchema(subjects, { id: uuid });
