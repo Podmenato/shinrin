@@ -1,7 +1,15 @@
 import { query, command, form } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { agentSubagents, agentTools, agents, sessions, tools } from '$lib/server/db/schema';
+import {
+	agentSubagents,
+	agentTools,
+	agents,
+	messageToolCalls,
+	messages,
+	sessions,
+	tools
+} from '$lib/server/db/schema';
 import { insertSessionSchema } from '$lib/server/db/schemas';
 import { and, desc, eq, inArray, isNull, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
@@ -141,6 +149,25 @@ export const createSession = command(
 		return session;
 	}
 );
+
+/** Permanently deletes a session along with its messages and their tool calls. */
+export const deleteSession = command(v.pipe(v.string(), v.uuid()), async (id) => {
+	await db.transaction(async (tx) => {
+		const sessionMessages = await tx
+			.select({ id: messages.id })
+			.from(messages)
+			.where(eq(messages.sessionId, id));
+		const messageIds = sessionMessages.map((m) => m.id);
+
+		if (messageIds.length > 0) {
+			await tx.delete(messageToolCalls).where(inArray(messageToolCalls.messageId, messageIds));
+			await tx.delete(messages).where(eq(messages.sessionId, id));
+		}
+
+		await tx.delete(sessions).where(eq(sessions.id, id));
+	});
+	await getAllSessions().refresh();
+});
 
 /** Creates or updates an agent's name, system prompt, subject, and assigned tools. */
 export const saveAgent = form(

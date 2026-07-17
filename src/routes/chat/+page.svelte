@@ -10,10 +10,14 @@
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Spinner } from '$lib/components/ui/spinner/index.js';
-	import DataTable, { type DataTableColumn } from '$lib/components/data-table/data-table.svelte';
+	import DataTable, {
+		renderComponent,
+		type DataTableColumn
+	} from '$lib/components/data-table/data-table.svelte';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import { formatDateTime } from '$lib/date';
 	import { toast } from 'svelte-sonner';
+	import DeleteSessionAction from './delete-session-action.svelte';
 
 	const agents = getAgents();
 	const sessions = getAllSessions();
@@ -53,7 +57,12 @@
 		{ name: 'Agent', width: 'w-40', cell: (session) => session.agentName },
 		{ name: 'Session', cell: (session) => session.name },
 		{ name: 'Model', width: 'w-48', cell: (session) => session.model },
-		{ name: 'Created', width: 'w-40', cell: (session) => formatDateTime(session.createdAt) }
+		{ name: 'Created', width: 'w-40', cell: (session) => formatDateTime(session.createdAt) },
+		{
+			name: 'Actions',
+			width: 'w-10',
+			cell: (session) => renderComponent(DeleteSessionAction, { sessionId: session.id })
+		}
 	];
 
 	function handleKeydown(e: KeyboardEvent) {
