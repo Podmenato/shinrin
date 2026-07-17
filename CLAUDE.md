@@ -293,6 +293,27 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
   [app-sidebar.svelte](src/lib/components/app-sidebar.svelte)).
 - Icons are `@lucide/svelte`, imported per-icon, e.g.
   `import HouseIcon from '@lucide/svelte/icons/house'`.
+- **A bits-ui `child`-snippet trigger (`AlertDialog.Trigger`, etc.) placed inside an element
+  that already has its own `onclick` (e.g. a `DataTable` row via `onRowClick`) needs care** —
+  two compounding gotchas, hit in
+  [delete-session-action.svelte](src/routes/chat/delete-session-action.svelte):
+  - The snippet's `props` bag must be spread onto your element for the trigger to actually
+    open (it carries the real `onclick`, plus `aria-*`/`id`/ref wiring). But if you also
+    write your own `onclick` *before* `{...props}`, the spread's `onclick` silently wins and
+    overwrites yours — attribute order matters, last one wins.
+  - `props` is typed `Record<string, unknown>` (bits-ui's `WithChild` type is intentionally
+    generic), so `props.onclick` is `unknown` — calling it yourself (e.g. to chain your own
+    handler after `stopPropagation()`) doesn't type-check even with `?.()`.
+  - Net effect: for a trigger nested in a row/element with its own click handler, skip
+    `Trigger`/`child` entirely — drive the dialog with a local `let open = $state(false)` +
+    `bind:open` on `.Root`, and a plain `Button` whose `onclick` calls
+    `e.stopPropagation()` then sets `open = true`. This sidesteps both gotchas rather than
+    fighting them, at the cost of losing the trigger's automatic `aria-*` wiring (worth
+    adding by hand if that matters for the specific control).
+  - This only applies when the trigger has a click-handling ancestor. A trigger with no such
+    ancestor (e.g. [delete-agent-action.svelte](src/routes/agents/[agentId]/delete-agent-action.svelte),
+    which sits in a plain form footer) has no conflict — keep using `Trigger`/`child` there,
+    it's simpler and gives you the ARIA attributes for free.
 
 ## Dev commands (use pnpm)
 
