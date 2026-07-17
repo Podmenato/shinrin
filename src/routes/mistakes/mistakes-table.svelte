@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { getAllMistakes } from '$lib/mistakes.remote';
 	import DataTable, { type DataTableColumn } from '$lib/components/data-table/data-table.svelte';
 	import CircleXIcon from '@lucide/svelte/icons/circle-x';
@@ -7,6 +9,10 @@
 	const mistakes = getAllMistakes();
 
 	type Mistake = Awaited<ReturnType<typeof getAllMistakes>>[number];
+
+	function openMistake(mistake: Mistake) {
+		goto(resolve(`/mistakes/${mistake.id}`));
+	}
 
 	const columns: DataTableColumn<Mistake>[] = [
 		{ name: 'Subject', width: 'w-40', cell: (mistake) => mistake.subjectName },
@@ -23,4 +29,5 @@
 	Icon={CircleXIcon}
 	emptyTitle="No mistakes recorded yet"
 	emptyDesc="Mistakes are logged by agents as they observe them during sessions."
+	onRowClick={openMistake}
 />
