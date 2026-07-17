@@ -12,7 +12,6 @@
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Spinner } from '$lib/components/ui/spinner/index.js';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import { toast } from 'svelte-sonner';
 	import DeleteAgentAction from './[agentId]/delete-agent-action.svelte';
@@ -224,12 +223,9 @@
 				{#if agent}
 					<DeleteAgentAction agentId={agent.id} />
 				{/if}
-				<div class="flex items-center justify-between gap-1">
-					<Button type="submit" disabled={agentForm.pending > 0}>
-						{agent ? 'Save' : 'Create'}
-					</Button>
-					{#if agentForm.pending > 0}<Spinner />{/if}
-				</div>
+				<Button type="submit" disabled={agentForm.pending > 0} isLoading={agentForm.pending > 0}>
+					{agent ? 'Save' : 'Create'}
+				</Button>
 			</div>
 		</form>
 	</Card.Content>

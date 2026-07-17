@@ -5,7 +5,6 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Spinner } from '$lib/components/ui/spinner/index.js';
 	import { toast } from 'svelte-sonner';
 	import { formatDateTime } from '$lib/date';
 	import { goto } from '$app/navigation';
@@ -65,12 +64,9 @@
 			</Field.Field>
 
 			<div class="flex items-center justify-end gap-2">
-				<div class="flex items-center justify-between gap-1">
-					<Button type="submit" disabled={subjectForm.pending > 0}>
-						{subject ? 'Save' : 'Create'}
-					</Button>
-					{#if subjectForm.pending > 0}<Spinner />{/if}
-				</div>
+				<Button type="submit" disabled={subjectForm.pending > 0} isLoading={subjectForm.pending > 0}>
+					{subject ? 'Save' : 'Create'}
+				</Button>
 			</div>
 		</form>
 	</Card.Content>

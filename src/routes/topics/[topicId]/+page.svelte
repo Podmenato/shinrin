@@ -10,7 +10,6 @@
 	import * as Field from '$lib/components/ui/field/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Spinner } from '$lib/components/ui/spinner/index.js';
 	import TopicStatusBadge from '../topic-status-badge.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import GraduationCapIcon from '@lucide/svelte/icons/graduation-cap';
@@ -142,13 +141,9 @@
 					</Select.Root>
 				</Field.Field>
 
-				<Button type="submit" disabled={isStartDisabled}>
-					{#if isStarting}
-						<Spinner />
-					{:else}
-						<GraduationCapIcon />
-						Start studying
-					{/if}
+				<Button type="submit" disabled={isStartDisabled} isLoading={isStarting}>
+					<GraduationCapIcon />
+					Start studying
 				</Button>
 			</form>
 		</Card.Content>

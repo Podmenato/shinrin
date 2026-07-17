@@ -9,7 +9,6 @@
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Spinner } from '$lib/components/ui/spinner/index.js';
 	import DataTable, {
 		renderComponent,
 		type DataTableColumn
@@ -129,13 +128,7 @@
 				</Field.Field>
 
 				<div class="flex justify-end">
-					<Button type="submit" disabled={!canStartChat}>
-						{#if isSending}
-							<Spinner />
-						{:else}
-							Start chat
-						{/if}
-					</Button>
+					<Button type="submit" disabled={!canStartChat} isLoading={isSending}>Start chat</Button>
 				</div>
 			</form>
 		</Card.Content>

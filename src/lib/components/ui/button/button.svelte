@@ -45,10 +45,13 @@
 		WithElementRef<HTMLAnchorAttributes> & {
 			variant?: ButtonVariant;
 			size?: ButtonSize;
+			isLoading?: boolean;
 		};
 </script>
 
 <script lang="ts">
+	import { Spinner } from '$lib/components/ui/spinner/index.js';
+
 	let {
 		class: className,
 		variant = 'default',
@@ -57,9 +60,12 @@
 		href = undefined,
 		type = 'button',
 		disabled,
+		isLoading = false,
 		children,
 		...restProps
 	}: ButtonProps = $props();
+
+	const isDisabled = $derived(disabled || isLoading);
 </script>
 
 {#if href}
@@ -67,13 +73,17 @@
 		bind:this={ref}
 		data-slot="button"
 		class={cn(buttonVariants({ variant, size }), className)}
-		href={disabled ? undefined : href}
-		aria-disabled={disabled}
-		role={disabled ? 'link' : undefined}
-		tabindex={disabled ? -1 : undefined}
+		href={isDisabled ? undefined : href}
+		aria-disabled={isDisabled}
+		role={isDisabled ? 'link' : undefined}
+		tabindex={isDisabled ? -1 : undefined}
 		{...restProps}
 	>
-		{@render children?.()}
+		{#if isLoading}
+			<Spinner />
+		{:else}
+			{@render children?.()}
+		{/if}
 	</a>
 {:else}
 	<button
@@ -81,9 +91,13 @@
 		data-slot="button"
 		class={cn(buttonVariants({ variant, size }), className)}
 		{type}
-		{disabled}
+		disabled={isDisabled}
 		{...restProps}
 	>
-		{@render children?.()}
+		{#if isLoading}
+			<Spinner />
+		{:else}
+			{@render children?.()}
+		{/if}
 	</button>
 {/if}

@@ -10,7 +10,6 @@
 	import * as Field from '$lib/components/ui/field/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Spinner } from '$lib/components/ui/spinner/index.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import { formatDateTime } from '$lib/date';
@@ -132,13 +131,9 @@
 					</Select.Root>
 				</Field.Field>
 
-				<Button type="submit" disabled={isStartDisabled}>
-					{#if isStarting}
-						<Spinner />
-					{:else}
-						<MessageSquareIcon />
-						Start conversation
-					{/if}
+				<Button type="submit" disabled={isStartDisabled} isLoading={isStarting}>
+					<MessageSquareIcon />
+					Start conversation
 				</Button>
 			</form>
 		</Card.Content>
