@@ -1,8 +1,46 @@
 # shinrin
 
-A personal language-study assistant: a SvelteKit UI over a tool-calling agent
-loop backed by Ollama and Anki, with Postgres for sessions/messages/memories.
-See [CLAUDE.md](CLAUDE.md) for an architecture overview.
+Shinrin (森林, "forest") is a personal language-study assistant: a SvelteKit
+UI on top of a tool-calling agent loop, running against a local LLM via
+Ollama, with Anki as its flashcard backend and Postgres for persistence
+(sessions, messages, memories, per-language study progress, mistake logs).
+
+It's a from-scratch alternative to generic chatbot-based studying — instead
+of a stateless chat window, the agent has tools to read and write durable
+per-subject state (topics you're working on, mistakes you keep making) across
+sessions, plus direct access to your real Anki collection instead of just
+talking *about* flashcards.
+
+It's also a personal project for learning how to build agentic systems
+end-to-end — the architecture choices (tool registry, subagents, contextual
+tools, remote functions) are as much about exploring that space as they are
+about shipping a study app. See [CLAUDE.md](CLAUDE.md) for the full
+architecture rundown.
+
+## Where this is headed
+
+Working end-to-end today: chat with a language-tutor agent backed by Ollama,
+tool access to Anki, persistent per-agent memory, and subagents (an agent can
+delegate to another agent as a tool call).
+
+Under consideration / in progress:
+
+- **Article reading & discovery** — feed the agent a webpage and have it help
+  with vocab/grammar, then quiz you on it; eventually have it surface
+  articles matching your current level on its own.
+- **Quiz generation** — agent-authored quizzes with graded, tracked results.
+- **Handwriting/kanji practice** — a canvas UI where a vision model grades
+  stroke input.
+- **Work-session logging via MCP → roleplay practice** — expose an MCP
+  server from Shinrin (e.g. `logWorkSession`) that a separate Claude Code
+  session can call after a work day to log what was done; the tutor agent
+  then uses that log as material for Japanese-workplace roleplay practice —
+  describing real engineering work in the vocab/register you'd actually need.
+- A continuing **frontend overhaul** on shadcn-svelte, and general agent-loop
+  improvements (streaming, tool-call visibility, multi-provider support).
+
+None of the above is committed to a timeline — this is a side project that
+grows as time and interest allow.
 
 ## Setup
 
