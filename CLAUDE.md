@@ -293,6 +293,17 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
   [app-sidebar.svelte](src/lib/components/app-sidebar.svelte)).
 - Icons are `@lucide/svelte`, imported per-icon, e.g.
   `import HouseIcon from '@lucide/svelte/icons/house'`.
+- [Button](src/lib/components/ui/button/button.svelte) has an `isLoading` prop: when true it
+  disables the button and swaps `children` for a `Spinner`, for both the `<button>` and `<a>`
+  (`href`) render paths. Use it instead of hand-rolling a local
+  `{#if pending}<Spinner />{:else}...{/if}` inside a `Button` — see
+  [chat/+page.svelte](src/routes/chat/+page.svelte) or
+  [agents/agent-form.svelte](src/routes/agents/agent-form.svelte) for the pattern. Doesn't apply
+  to `AlertDialog.Action`/`.Cancel` ([alert-dialog-action.svelte](src/lib/components/ui/alert-dialog/alert-dialog-action.svelte),
+  `-cancel.svelte`) — those are separate bits-ui-backed components styled with the same
+  `buttonVariants` but not built on `Button` itself, so a pending dialog action still needs its
+  own adjacent `Spinner` (see
+  [delete-session-action.svelte](src/routes/chat/delete-session-action.svelte)).
 - **A bits-ui `child`-snippet trigger (`AlertDialog.Trigger`, etc.) placed inside an element
   that already has its own `onclick` (e.g. a `DataTable` row via `onRowClick`) needs care** —
   two compounding gotchas, hit in
