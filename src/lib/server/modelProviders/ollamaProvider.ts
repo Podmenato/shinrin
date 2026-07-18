@@ -6,6 +6,11 @@ import { logger } from '../logger';
 
 const OLLAMA_LOCAL_URL = 'http://localhost:11434';
 
+// Ollama defaults to a small runtime context window regardless of what the
+// model itself supports, and silently drops the oldest turns once it fills
+// rather than erroring — set an explicit budget instead of leaving it unset.
+const NUM_CTX = 16384;
+
 function toOllamaMessage(message: Message): OllamaMessage {
 	return {
 		role: message.role,
@@ -53,7 +58,8 @@ export class OllamaProvider implements ModelProvider {
 		const response = await this.ollama.chat({
 			model: this.model,
 			messages: messages.map(toOllamaMessage),
-			tools: tools.map(toOllamaTool)
+			tools: tools.map(toOllamaTool),
+			options: { num_ctx: NUM_CTX }
 		});
 
 		logger.debug(
@@ -88,11 +94,16 @@ export class OllamaProvider implements ModelProvider {
 			model: this.model,
 			messages: messages.map(toOllamaMessage),
 			tools: tools.map(toOllamaTool),
+			options: { num_ctx: NUM_CTX },
 			stream: true
 		});
 
 		let content = '';
 		let toolCalls: ModelResponse['toolCalls'];
+
+		// for debug logs
+		let promptTokens: number | undefined;
+		let responseTokens: number | undefined;
 
 		for await (const chunk of stream) {
 			if (chunk.message.content) {
@@ -105,9 +116,16 @@ export class OllamaProvider implements ModelProvider {
 					args: tc.function.arguments
 				}));
 			}
+			if (chunk.done) {
+				promptTokens = chunk.prompt_eval_count;
+				responseTokens = chunk.eval_count;
+			}
 		}
 
-		logger.debug({ hasToolCalls: !!toolCalls?.length }, 'received streaming chat response');
+		logger.debug(
+			{ hasToolCalls: !!toolCalls?.length, promptTokens, responseTokens },
+			'received streaming chat response'
+		);
 
 		return { content, toolCalls };
 	}

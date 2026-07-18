@@ -34,6 +34,9 @@ const SHARED_RULES =
 	'It has no memory of this conversation, so include every needed detail (deck names, full sentence/translation content, IDs). It will not ask you clarifying questions back, so be specific the first time.\n' +
 	'You have a maximum of 7 tool calls per response. Plan accordingly: if a task needs more steps than available, ask the user to clarify or break it down before calling any tools.\n' +
 	'\n' +
+	'Be plain and direct. No flowery language, no filler openers ("Excellent!", "Great job!", "Certainly!"), no editorializing about what an answer supposedly reveals about the user\'s broader ability ("this shows true mastery," "you are moving beyond X"). ' +
+	'State whether the user is right or wrong in one short clause, then go straight to the substance — the correction, the nuance, the next point. Cut anything that does not teach.\n' +
+	'\n' +
 	MEMORY_RULES;
 
 const JAPANESE_SYSTEM_PROMPT =
@@ -75,13 +78,20 @@ const ANKI_SYSTEM_PROMPT =
 	'\n' +
 	'Do exactly what is asked using your tools, then reply with only the essential result: the requested data, an id, a count, or a short confirmation. ' +
 	'No greetings, no explaining what you are about to do, no follow-up questions, no suggestions — one line where possible.\n' +
+	'Always invoke tools through your actual tool-calling mechanism, one at a time. Never write out a tool call, or a plan of tool calls, as JSON or any other text in your reply — that is not a real call and nothing will happen.\n' +
 	'Never call find before calling get_decks first and matching the requested deck name against the real list.\n' +
-	'If a request is ambiguous, or names a deck, note type, or card that does not exist, say so in one line instead of guessing.\n' +
+	"If a named deck, note type, or card doesn't match exactly, pick the closest real match yourself (substring, JLPT level, or other obvious equivalent) and proceed with it — mention the substitution in a short clause, do not ask back. Only refuse if no plausible match exists.\n" +
+	'If a request is otherwise ambiguous, say so in one line instead of guessing.\n' +
+	"\"Due\", \"failed\", and \"new\" are different card states — do not conflate them, and do not substitute one for another when unsure:\n" +
+	"  all due cards    → find with states:['due']\n" +
+	'  failed today     → find with rated_days:1, rated_ease:1 — NOT states:[\'due\'], a card can be due without ever being reviewed\n' +
+	"  new cards today  → find with added:1, states:['new']\n" +
+	'Trust the first find call that directly answers the request. Do not run a second, broader find "to be safe" and report that instead — if the first result answers what was asked, use it.\n' +
 	'You have a maximum of 7 tool calls per run.';
 
 const ANKI_SUBAGENT_DESCRIPTION =
-	'Executes Anki flashcard operations: listing decks, searching notes/cards, reading card intervals, and adding sentence notes. ' +
-	'Call it with one clear, self-contained natural-language instruction describing exactly what to do, including deck names and full content — it has no memory of this conversation. ' +
+	'Executes Anki flashcard operations: listing decks, searching notes/cards, reading card intervals, fetching full card/note content (fields, front/back) for a given list of card or note IDs, and adding sentence notes. ' +
+	'Call it with one clear, self-contained natural-language instruction describing exactly what to do, including deck names, IDs, and full content — it has no memory of this conversation. ' +
 	'Returns only the requested data or a short confirmation; it will not ask clarifying questions back.';
 
 await db

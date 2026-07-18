@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 import { agents, sessions } from './db/schema';
 import { getTools, getSubagentTools } from './tools/toolRegistry';
 
-const MAX_ITERATIONS = 7;
+const MAX_ITERATIONS = 10;
 
 export class Agent {
 	private provider: ModelProvider;
@@ -119,6 +119,7 @@ export class Agent {
 					role: 'system',
 					content: 'Provided no response, and called no tools. Retry.'
 				});
+				continue;
 			}
 			logger.debug({ content: response.content, toolCalls: response.toolCalls }, 'model response');
 

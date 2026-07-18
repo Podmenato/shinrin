@@ -7,6 +7,7 @@ export type FindArgs = {
 	deck: string;
 	rated_days?: number;
 	rated_ease?: number;
+	added?: number;
 	states?: string[];
 	props?: string[];
 	field?: string;
@@ -31,6 +32,12 @@ export const FIND_PARAMETERS = [
 		type: 'integer',
 		description:
 			'Rating to filter by: 1=Again(failed), 2=Hard, 3=Good, 4=Easy. Only applies when rated_days is set. Omit to match any rating.',
+		required: false
+	},
+	{
+		name: 'added',
+		type: 'integer',
+		description: 'Limit to cards added within the last N days (1 = today).',
 		required: false
 	},
 	{
@@ -64,11 +71,18 @@ export const FIND_PARAMETERS = [
 ] as const;
 
 export const FIND_DESCRIPTION =
+	'Common requests — use exactly these, they are not interchangeable:\n' +
+	"  All due cards        → states:['due']            (scheduled for review now; may include cards never touched today)\n" +
+	"  Failed today         → rated_days:1, rated_ease:1 (actually reviewed and marked Again today)\n" +
+	"  Failed in last N days→ rated_days:N, rated_ease:1\n" +
+	"  New cards today      → added:1, states:['new']    (first added to Anki today, never reviewed)\n" +
+	"  is:due is NEVER a substitute for 'failed' — a card can be due without ever having been reviewed, and a card failed today may or may not still be due depending on when it was last reviewed.\n" +
+	'\n' +
 	'rated_days + rated_ease — cards reviewed in the last N days with a specific rating\n' +
 	'  rated_ease: 1=Again (failed), 2=Hard, 3=Good, 4=Easy\n' +
-	"  Today's failed cards → rated_days:1, rated_ease:1\n" +
-	'  Last 7 days failed  → rated_days:7, rated_ease:1\n' +
 	'  Omit rated_ease to match any rating within rated_days\n' +
+	'\n' +
+	'added — cards added (created) within the last N days, regardless of review state\n' +
 	'\n' +
 	'states — card state filters (array)\n' +
 	'  new, due, learn, review, suspended, buried\n' +
@@ -104,6 +118,12 @@ export async function validateFindArgs(args: Record<string, unknown>): Promise<F
 		}
 	}
 
+	if (args.added !== undefined) {
+		if (!Number.isInteger(args.added) || (args.added as number) < 1) {
+			throw new ToolError('added must be a positive integer.');
+		}
+	}
+
 	if (args.states !== undefined) {
 		if (!Array.isArray(args.states)) throw new ToolError('states must be an array.');
 		for (const state of args.states) {
@@ -129,6 +149,7 @@ export async function validateFindArgs(args: Record<string, unknown>): Promise<F
 		deck: args.deck,
 		rated_days: args.rated_days as number | undefined,
 		rated_ease: args.rated_ease as number | undefined,
+		added: args.added as number | undefined,
 		states: args.states as string[] | undefined,
 		props: args.props as string[] | undefined,
 		field: args.field as string | undefined,
@@ -147,6 +168,8 @@ export function buildFindQuery(args: FindArgs): string {
 				: `rated:${args.rated_days}`
 		);
 	}
+
+	if (args.added !== undefined) parts.push(`added:${args.added}`);
 
 	for (const state of args.states ?? []) parts.push(`is:${state}`);
 	for (const p of args.props ?? []) parts.push(`prop:${p}`);
