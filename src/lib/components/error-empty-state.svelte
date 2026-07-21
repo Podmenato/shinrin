@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { Component } from 'svelte';
 	import * as Empty from '$lib/components/ui/empty/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { errorState } from '$lib/errorState.svelte';
 
 	let {
 		icon,
@@ -16,6 +18,13 @@
 		href: string;
 		linkText: string;
 	} = $props();
+
+	onMount(() => {
+		errorState.active = true;
+		return () => {
+			errorState.active = false;
+		};
+	});
 </script>
 
 <div class="flex h-full items-center justify-center p-8">

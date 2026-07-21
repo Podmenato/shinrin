@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { mode, toggleMode } from 'mode-watcher';
+	import { errorState } from '$lib/errorState.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import HouseIcon from '@lucide/svelte/icons/house';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
@@ -35,7 +36,7 @@
 					<Sidebar.MenuItem>
 						<Sidebar.MenuButton isActive={page.url.pathname === item.href}>
 							{#snippet child({ props })}
-								<a href={item.href} {...props}>
+								<a href={item.href} data-sveltekit-reload={errorState.active} {...props}>
 									<item.icon />
 									<span>{item.title}</span>
 								</a>
@@ -52,7 +53,7 @@
 				<Sidebar.MenuItem>
 					<Sidebar.MenuButton isActive={page.url.pathname === item.href}>
 						{#snippet child({ props })}
-							<a href={item.href} {...props}>
+							<a href={item.href} data-sveltekit-reload={errorState.active} {...props}>
 								<item.icon />
 								<span>{item.title}</span>
 							</a>
