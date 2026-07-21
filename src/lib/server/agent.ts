@@ -27,7 +27,8 @@ export class Agent {
 		agentId: string,
 		name: string,
 		model: string,
-		modelProvider: ModelProvider
+		modelProvider: ModelProvider,
+		parentSessionId?: string
 	): Promise<Agent> {
 		const agent = await db.query.agents.findFirst({
 			where: eq(agents.id, agentId),
@@ -42,9 +43,13 @@ export class Agent {
 			agent.agentTools.map((at) => at.tool.name),
 			{ agentId, subjectId: agent.subjectId }
 		);
-		const subagentTools = await getSubagentTools(agentId, model);
 
-		const [session] = await db.insert(sessions).values({ agentId, name, model }).returning();
+		const [session] = await db
+			.insert(sessions)
+			.values({ agentId, name, model, parentSessionId })
+			.returning();
+
+		const subagentTools = await getSubagentTools(agentId, model, session.id);
 
 		const contextManager = new ContextManager(agent.systemPrompt ?? '', session.id);
 
@@ -66,7 +71,7 @@ export class Agent {
 			session.agent.agentTools.map((at) => at.tool.name),
 			{ agentId, subjectId: session.agent.subjectId }
 		);
-		const subagentTools = await getSubagentTools(agentId, session.model);
+		const subagentTools = await getSubagentTools(agentId, session.model, session.id);
 
 		const systemPrompt = [session.agent.systemPrompt, session.systemPrompt]
 			.filter((prompt) => prompt !== null && prompt.trim() !== '')

@@ -69,9 +69,14 @@ function subagentToolName(agentName: string): string {
 /**
  * Resolves the agents assigned as subagents of `agentId` into callable tools. Each subagent
  * runs on its own `defaultModel` if set, falling back to `callerModel` (the calling agent's
- * model) otherwise.
+ * model) otherwise. `parentSessionId` is the calling agent's session, attributed to whatever
+ * session a subagent invocation spawns.
  */
-export async function getSubagentTools(agentId: string, callerModel: string): Promise<Tool[]> {
+export async function getSubagentTools(
+	agentId: string,
+	callerModel: string,
+	parentSessionId: string
+): Promise<Tool[]> {
 	const rows = await db.query.agentSubagents.findMany({
 		where: eq(agentSubagents.agentId, agentId),
 		with: { subagent: true }
@@ -83,7 +88,8 @@ export async function getSubagentTools(agentId: string, callerModel: string): Pr
 				row.subagent.id,
 				subagentToolName(row.subagent.name),
 				row.subagent.subagentDescription ?? `Delegate a task to the "${row.subagent.name}" agent.`,
-				row.subagent.defaultModel ?? callerModel
+				row.subagent.defaultModel ?? callerModel,
+				parentSessionId
 			)
 	);
 }

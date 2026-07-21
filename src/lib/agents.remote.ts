@@ -118,10 +118,13 @@ export const getAgentSessions = query(v.pipe(v.string(), v.uuid()), async (agent
 	if (!agent) {
 		error(404, 'Agent not found');
 	}
-	return db.select().from(sessions).where(eq(sessions.agentId, agentId));
+	return db
+		.select()
+		.from(sessions)
+		.where(and(eq(sessions.agentId, agentId), isNull(sessions.parentSessionId)));
 });
 
-/** Returns all sessions across all agents, including the agent name. */
+/** Returns all top-level sessions across all agents, including the agent name. Subagent-spawned sessions are excluded. */
 export const getAllSessions = query(async () => {
 	return db
 		.select({
@@ -134,6 +137,7 @@ export const getAllSessions = query(async () => {
 		})
 		.from(sessions)
 		.innerJoin(agents, eq(sessions.agentId, agents.id))
+		.where(isNull(sessions.parentSessionId))
 		.orderBy(desc(sessions.createdAt));
 });
 

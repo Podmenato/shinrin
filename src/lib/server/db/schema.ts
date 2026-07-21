@@ -75,6 +75,7 @@ export const sessions = pgTable('sessions', {
 	model: text().notNull(),
 	systemPrompt: text('system_prompt'),
 	summary: text('summary'),
+	parentSessionId: uuid('parent_session_id').references((): AnyPgColumn => sessions.id),
 	summarizedThroughMessageId: uuid('summarized_through_message_id').references(
 		(): AnyPgColumn => messages.id
 	),

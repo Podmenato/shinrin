@@ -11,7 +11,8 @@ export class SubagentTool implements Tool {
 		private subagentId: string,
 		name: string,
 		description: string,
-		private model: string
+		private model: string,
+		private parentSessionId: string
 	) {
 		this.definition = {
 			name,
@@ -35,7 +36,13 @@ export class SubagentTool implements Tool {
 
 		// TODO: needs provider as a agent attribute + provider registry
 		const provider = new OllamaProvider(this.model);
-		const agent = await Agent.create(this.subagentId, this.definition.name, this.model, provider);
+		const agent = await Agent.create(
+			this.subagentId,
+			this.definition.name,
+			this.model,
+			provider,
+			this.parentSessionId
+		);
 		return agent.run(input);
 	}
 
