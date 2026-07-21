@@ -279,6 +279,30 @@ to release.
   a real full-page navigation instead of client-side routing, which sidesteps the bug
   entirely (a fresh app instance has no stale boundary state). Remove that attribute +
   this note once upstream ships a real fix.
+  Same mechanism now covers sidebar navigation:
+  [errorState.svelte.ts](src/lib/errorState.svelte.ts) exports a one-field class singleton
+  (`errorState.active`); [error-empty-state.svelte](src/lib/components/error-empty-state.svelte)
+  sets/clears it from `onMount`'s returned cleanup, not a bare `onDestroy` and not a
+  top-level assignment — `errorState` is module-scope, so a write outside `onMount` would
+  also run during SSR, where it's both the wrong order (`app-sidebar.svelte` renders above
+  `{@render children()}`, i.e. before the error component further down the tree would even
+  set it) and a real cross-request leak, since Node reuses the same module instance across
+  concurrent requests. `onMount` never runs server-side at all, which keeps the flag
+  strictly client-only in both directions, matching the fact that this bug itself only ever
+  happens on client-side navigation. [app-sidebar.svelte](src/lib/components/app-sidebar.svelte)
+  reads `errorState.active` to add `data-sveltekit-reload={errorState.active}` to its nav
+  links — normal SPA links, except while an error page is currently showing, when they fall
+  back to the same full-reload escape hatch as the recovery button above.
+  Confirmed by reading the installed `@sveltejs/kit@3.0.0-next.8` source directly (it ships
+  from `src/`, not a prebuilt `dist/`): `root.svelte`/`client.js` already call a private
+  per-depth `resetters[depth]()` on every client-side navigation (citing
+  sveltejs/kit#15694), trying to auto-clear failed boundaries — a *different*,
+  already-fixed bug — but that doesn't reach into Svelte's `Boundary` internals to fix
+  #16207 above, and `resetters` plus the render tree are module-private to kit's client
+  runtime, never exported. There is no supported way to read "a boundary is currently
+  failed" from app code (`page.error` doesn't cover this case either, see above) — that's
+  why `errorState` exists as a hand-rolled signal instead of something read off an
+  existing store.
 - **IDE may falsely report `Cannot use \`await\` in deriveds... unless
   \`experimental.async\` is true`** (svelte.dev/e/experimental_async) even though the
   option is set and the real compiler (Vite dev server, `pnpm build`, `pnpm run
