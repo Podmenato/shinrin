@@ -50,9 +50,27 @@ progress, mistake logs).
   `execute()` runs a full nested `Agent.create(...).run(...)` against the
   target agent and returns its final reply as the tool result. A subagent
   runs on its own `agents.defaultModel` if set, otherwise inherits whatever
-  model the calling agent is using. Nested runs are not specially persisted —
-  they show up as an ordinary tool call/result on the parent, same as any
-  other tool.
+  model the calling agent is using. `getSubagentTools` requires
+  `agents.subagentDescription` to be set on every directly assigned subagent —
+  it throws immediately (no generic-description fallback) if one is missing,
+  since an undescribed subagent tool is effectively uncallable by the model.
+  This is checked eagerly for *all* of an agent's direct subagents whenever
+  that agent's session is created/resumed (`Agent.create`/`createFromSession`),
+  not just the one actually invoked — so one misconfigured subagent breaks
+  every session for every agent it's assigned to, not just calls to itself.
+  Nested runs get a real `sessions` row like any other (via `Agent.create`),
+  tagged with `sessions.parentSessionId` pointing back at the calling session
+  (threaded through `getSubagentTools(agentId, callerModel, parentSessionId)` →
+  `SubagentTool` → the nested `Agent.create` call) — fully persisted for
+  debugging, just excluded from the top-level session lists
+  (`getAllSessions`/`getAgentSessions` in
+  [agents.remote.ts](src/lib/agents.remote.ts) both filter
+  `isNull(sessions.parentSessionId)`). There's a real circular import between
+  `agent.ts` → `toolRegistry.ts` → `subagentTool.ts` → `agent.ts` (the last
+  edge importing `Agent` back); it's safe because `subagentTool.ts` only
+  touches `Agent` inside `execute()`'s body, never at module top level, so
+  nothing depends on the binding before all three modules finish loading —
+  don't "fix" this cycle, it's not a bug.
 - **Subjects**: `subjects` (name + description, see
   [src/lib/subjects.remote.ts](src/lib/subjects.remote.ts) and
   `src/routes/subjects/`) is the ownership/routing key for `study_topics` and
