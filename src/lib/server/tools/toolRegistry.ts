@@ -82,14 +82,19 @@ export async function getSubagentTools(
 		with: { subagent: true }
 	});
 
-	return rows.map(
-		(row) =>
-			new SubagentTool(
-				row.subagent.id,
-				subagentToolName(row.subagent.name),
-				row.subagent.subagentDescription ?? `Delegate a task to the "${row.subagent.name}" agent.`,
-				row.subagent.defaultModel ?? callerModel,
-				parentSessionId
-			)
-	);
+	return rows.map((row) => {
+		if (!row.subagent.subagentDescription) {
+			throw new Error(
+				`Subagent "${row.subagent.name}" (${row.subagent.id}) has no subagentDescription set.`
+			);
+		}
+
+		return new SubagentTool(
+			row.subagent.id,
+			subagentToolName(row.subagent.name),
+			row.subagent.subagentDescription,
+			row.subagent.defaultModel ?? callerModel,
+			parentSessionId
+		);
+	});
 }
