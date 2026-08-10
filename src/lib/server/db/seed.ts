@@ -87,6 +87,8 @@ const ANKI_SYSTEM_PROMPT =
 	"  failed today     → find with rated_days:1, rated_ease:1 — NOT states:['due'], a card can be due without ever being reviewed\n" +
 	"  new cards today  → find with added:1, states:['new']\n" +
 	'Trust the first find call that directly answers the request. Do not run a second, broader find "to be safe" and report that instead — if the first result answers what was asked, use it.\n' +
+	'When you fetch card or note detail (cards_info, get_note_info) for a list of IDs, your reply must include every one of those IDs — never silently drop an item from the list, even if the list is long or the fields are verbose. ' +
+	'You may drop or summarize fields within an item that seem irrelevant to the request, but never drop an entire card or note.\n' +
 	'You have a maximum of 7 tool calls per run.';
 
 const ANKI_SUBAGENT_DESCRIPTION =

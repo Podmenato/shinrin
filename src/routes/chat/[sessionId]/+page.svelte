@@ -4,7 +4,8 @@
 		getSession,
 		getSessionMessages,
 		getStreamingReply,
-		runAgent
+		runAgent,
+		cancelAgent
 	} from '$lib/sessions.remote';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -13,6 +14,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Spinner } from '$lib/components/ui/spinner/index.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
+	import SquareIcon from '@lucide/svelte/icons/square';
 	import ChatMessage from './chat-message.svelte';
 	import { toast } from 'svelte-sonner';
 
@@ -24,6 +26,7 @@
 	const streamingReply = $derived(getStreamingReply(sessionId));
 
 	let prompt = $state('');
+	let stopping = $state(false);
 	const isSending = $derived(runAgent.pending > 0);
 	const isGenerating = $derived(
 		streamingReply.current !== null && streamingReply.current !== undefined
@@ -51,6 +54,8 @@
 			prompt = '';
 		} catch {
 			toast.error('Failed to send message');
+		} finally {
+			stopping = false;
 		}
 	}
 
@@ -58,6 +63,16 @@
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
 			send();
+		}
+	}
+
+	async function cancel() {
+		stopping = true;
+		try {
+			await cancelAgent(sessionId);
+		} catch {
+			toast.error('Failed to cancel');
+			stopping = false;
 		}
 	}
 </script>
@@ -104,6 +119,10 @@
 				</div>
 			</ScrollArea>
 
+			{#if stopping}
+				<p class="text-sm text-muted-foreground">Stopping…</p>
+			{/if}
+
 			<form
 				class="flex gap-2"
 				onsubmit={(e) => {
@@ -119,6 +138,18 @@
 					bind:value={prompt}
 					onkeydown={handleKeydown}
 				/>
+				{#if isSending}
+					<Button
+						type="button"
+						variant="destructive"
+						size="icon"
+						isLoading={stopping}
+						onclick={cancel}
+						aria-label="Cancel"
+					>
+						<SquareIcon class="size-4 fill-current" />
+					</Button>
+				{/if}
 				<Button type="submit" disabled={isSending || prompt.trim() === ''}>
 					{#if isSending}
 						<Spinner />

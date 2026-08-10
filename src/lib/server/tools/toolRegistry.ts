@@ -21,18 +21,18 @@ import { UpdateMistakeTool } from './updateMistakeTool';
 
 export type ToolContext = { agentId: string; subjectId: string | null };
 
-const registry: Record<string, Tool> = {
-	current_time_tool: new CurrentTimeTool(),
-	get_decks: new GetDecksTool(),
-	add_note: new AddNoteTool(),
-	add_sentence_note: new AddSentenceNoteTool(),
-	find: new FindTool(),
-	get_note_types: new GetModelsTool(),
-	get_note_info: new GetNoteInfoTool(),
-	cards_info: new CardsInfoTool(),
-	get_intervals: new GetIntervalsTool(),
-	update_topic: new UpdateTopicTool(),
-	update_mistake: new UpdateMistakeTool()
+const registry: Record<string, () => Tool> = {
+	current_time_tool: () => new CurrentTimeTool(),
+	get_decks: () => new GetDecksTool(),
+	add_note: () => new AddNoteTool(),
+	add_sentence_note: () => new AddSentenceNoteTool(),
+	find: () => new FindTool(),
+	get_note_types: () => new GetModelsTool(),
+	get_note_info: () => new GetNoteInfoTool(),
+	cards_info: () => new CardsInfoTool(),
+	get_intervals: () => new GetIntervalsTool(),
+	update_topic: () => new UpdateTopicTool(),
+	update_mistake: () => new UpdateMistakeTool()
 };
 
 const contextualRegistry: Record<string, (ctx: ToolContext) => Tool> = {
@@ -47,11 +47,11 @@ export function getTools(names: string[], ctx: ToolContext): Tool[] {
 		if (name in contextualRegistry) {
 			return contextualRegistry[name](ctx);
 		}
-		const tool = registry[name];
-		if (!tool) {
+		const factory = registry[name];
+		if (!factory) {
 			throw new Error(`Unknown tool: ${name}`);
 		}
-		return tool;
+		return factory();
 	});
 }
 

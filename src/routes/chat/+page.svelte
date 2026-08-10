@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { getAgents, getAllSessions, createSession } from '$lib/agents.remote';
 	import { getAvailableModels } from '$lib/ollamaAdmin.remote';
-	import { runAgent } from '$lib/sessions.remote';
+	import { runAgent, cancelAgent } from '$lib/sessions.remote';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Field from '$lib/components/ui/field/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
@@ -14,6 +14,7 @@
 		type DataTableColumn
 	} from '$lib/components/data-table/data-table.svelte';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
+	import SquareIcon from '@lucide/svelte/icons/square';
 	import { formatDateTime } from '$lib/date';
 	import { toast } from 'svelte-sonner';
 	import DeleteSessionAction from './delete-session-action.svelte';
@@ -25,6 +26,8 @@
 	let prompt = $state('');
 	let agentId = $state('');
 	let model = $state('');
+	let runningSessionId = $state<string | null>(null);
+	let stopping = $state(false);
 
 	const isSending = $derived(createSession.pending > 0 || runAgent.pending > 0);
 	const canStartChat = $derived(prompt.trim() !== '' && !!agentId && !!model && !isSending);
@@ -35,12 +38,27 @@
 		const trimmed = prompt.trim();
 
 		const session = await createSession({ agentId, name: trimmed.slice(0, 60), model });
+		runningSessionId = session.id;
 		try {
 			await runAgent({ sessionId: session.id, prompt: trimmed });
 		} catch {
 			toast.error('Failed to send message');
+		} finally {
+			runningSessionId = null;
+			stopping = false;
 		}
 		await goto(resolve(`/chat/${session.id}`));
+	}
+
+	async function cancel() {
+		if (!runningSessionId) return;
+		stopping = true;
+		try {
+			await cancelAgent(runningSessionId);
+		} catch {
+			toast.error('Failed to cancel');
+			stopping = false;
+		}
 	}
 
 	const agentTriggerContent = $derived(
@@ -127,7 +145,23 @@
 					/>
 				</Field.Field>
 
-				<div class="flex justify-end">
+				{#if stopping}
+					<p class="text-right text-sm text-muted-foreground">Stopping…</p>
+				{/if}
+
+				<div class="flex justify-end gap-2">
+					{#if runAgent.pending > 0}
+						<Button
+							type="button"
+							variant="destructive"
+							size="icon"
+							isLoading={stopping}
+							onclick={cancel}
+							aria-label="Cancel"
+						>
+							<SquareIcon class="size-4 fill-current" />
+						</Button>
+					{/if}
 					<Button type="submit" disabled={!canStartChat} isLoading={isSending}>Start chat</Button>
 				</div>
 			</form>

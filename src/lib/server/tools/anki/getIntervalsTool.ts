@@ -23,14 +23,28 @@ export class GetIntervalsTool implements Tool {
 		]
 	};
 
+	private controller: AbortController | null = null;
+
 	async execute(args: Record<string, unknown>): Promise<string> {
+		this.controller = new AbortController();
+
 		const complete = args.complete === true;
 		const action = complete ? 'getIntervalsOfCards' : 'getIntervals';
-		const intervals = await ankiRequest<number[] | number[][]>(action, { cards: args.cardIds });
-		return JSON.stringify(intervals);
+
+		try {
+			const intervals = await ankiRequest<number[] | number[][]>(
+				action,
+				{ cards: args.cardIds },
+				this.controller.signal
+			);
+			return JSON.stringify(intervals);
+		} finally {
+			this.controller = null;
+		}
 	}
 
 	cancel(): Promise<string> {
-		return Promise.resolve('ok');
+		this.controller?.abort();
+		return Promise.resolve('Cancelled by user.');
 	}
 }

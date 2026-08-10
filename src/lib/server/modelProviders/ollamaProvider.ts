@@ -51,33 +51,17 @@ export class OllamaProvider implements ModelProvider {
 
 	constructor(private model: string) {}
 
+	// Delegates to chatStream and drains it rather than issuing its own `stream: false` request:
+	// the underlying `ollama` client only ever attaches an AbortController to the streaming code
+	// path (see `processStreamableRequest` in its source) — a plain non-streaming request has no
+	// signal at all, so it's the only way to make `chat()` abortable via `abort()` below.
 	async chat(messages: Message[], tools: Tool[]): Promise<ModelResponse> {
-		logger.debug({ model: this.model, messageCount: messages.length }, 'sending chat request');
-		logger.trace({ messages }, 'context');
-
-		const response = await this.ollama.chat({
-			model: this.model,
-			messages: messages.map(toOllamaMessage),
-			tools: tools.map(toOllamaTool),
-			options: { num_ctx: NUM_CTX }
-		});
-
-		logger.debug(
-			{
-				hasToolCalls: !!response.message.tool_calls?.length,
-				promptTokens: response.prompt_eval_count,
-				responseTokens: response.eval_count
-			},
-			'received chat response'
-		);
-
-		return {
-			content: response.message.content,
-			toolCalls: response.message.tool_calls?.map((tc) => ({
-				name: tc.function.name,
-				args: tc.function.arguments
-			}))
-		};
+		const stream = this.chatStream(messages, tools);
+		let next = await stream.next();
+		while (!next.done) {
+			next = await stream.next();
+		}
+		return next.value;
 	}
 
 	async *chatStream(
@@ -128,5 +112,9 @@ export class OllamaProvider implements ModelProvider {
 		);
 
 		return { content, toolCalls };
+	}
+
+	abort(): void {
+		this.ollama.abort();
 	}
 }

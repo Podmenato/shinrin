@@ -56,8 +56,21 @@ export class CardsInfoTool implements Tool {
 		]
 	};
 
+	private controller: AbortController | null = null;
+
 	async execute(args: Record<string, unknown>): Promise<string> {
-		const cards = await ankiRequest<CardInfo[]>('cardsInfo', { cards: args.cardIds });
+		this.controller = new AbortController();
+
+		let cards: CardInfo[];
+		try {
+			cards = await ankiRequest<CardInfo[]>(
+				'cardsInfo',
+				{ cards: args.cardIds },
+				this.controller.signal
+			);
+		} finally {
+			this.controller = null;
+		}
 
 		const cleanedCards = cards.map((card) => {
 			if (card.modelName === KANJI_MODEL) {
@@ -90,6 +103,7 @@ export class CardsInfoTool implements Tool {
 	}
 
 	cancel(): Promise<string> {
-		return Promise.resolve('ok');
+		this.controller?.abort();
+		return Promise.resolve('Cancelled by user.');
 	}
 }

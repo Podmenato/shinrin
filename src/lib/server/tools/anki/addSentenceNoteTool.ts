@@ -56,40 +56,63 @@ export class AddSentenceNoteTool implements Tool {
 		]
 	};
 
+	private controller: AbortController | null = null;
+
 	async execute(args: Record<string, unknown>): Promise<string> {
+		this.controller = new AbortController();
+
 		const { decks, sentence, translation, reading, notes, tags } = await this.validateArgs(args);
 		const [readingDeck, productionDeck, listeningDeck] = decks;
 
-		const noteId = await ankiRequest<number>('addNote', {
-			note: {
-				deckName: readingDeck,
-				modelName: MODEL_NAME,
-				fields: { Sentence: sentence, Translation: translation, Reading: reading, Notes: notes },
-				tags: ['shinrin', ...tags],
-				options: { allowDuplicate: false }
-			}
-		});
+		const { signal } = this.controller;
+		try {
+			const noteId = await ankiRequest<number>(
+				'addNote',
+				{
+					note: {
+						deckName: readingDeck,
+						modelName: MODEL_NAME,
+						fields: {
+							Sentence: sentence,
+							Translation: translation,
+							Reading: reading,
+							Notes: notes
+						},
+						tags: ['shinrin', ...tags],
+						options: { allowDuplicate: false }
+					}
+				},
+				signal
+			);
 
-		const [{ cards }] = await ankiRequest<{ cards: number[] }[]>('notesInfo', { notes: [noteId] });
-		const [readingCard, productionCard, listeningCard] = cards;
+			const [{ cards }] = await ankiRequest<{ cards: number[] }[]>(
+				'notesInfo',
+				{ notes: [noteId] },
+				signal
+			);
+			const [readingCard, productionCard, listeningCard] = cards;
 
-		await Promise.all([
-			ankiRequest('changeDeck', { cards: [productionCard], deck: productionDeck }),
-			ankiRequest('changeDeck', { cards: [listeningCard], deck: listeningDeck })
-		]);
+			await Promise.all([
+				ankiRequest('changeDeck', { cards: [productionCard], deck: productionDeck }, signal),
+				ankiRequest('changeDeck', { cards: [listeningCard], deck: listeningDeck }, signal)
+			]);
 
-		return JSON.stringify({
-			noteId,
-			cards: {
-				reading: { deck: readingDeck, cardId: readingCard },
-				production: { deck: productionDeck, cardId: productionCard },
-				listening: { deck: listeningDeck, cardId: listeningCard }
-			}
-		});
+			return JSON.stringify({
+				noteId,
+				cards: {
+					reading: { deck: readingDeck, cardId: readingCard },
+					production: { deck: productionDeck, cardId: productionCard },
+					listening: { deck: listeningDeck, cardId: listeningCard }
+				}
+			});
+		} finally {
+			this.controller = null;
+		}
 	}
 
 	cancel(): Promise<string> {
-		return Promise.resolve('ok');
+		this.controller?.abort();
+		return Promise.resolve('Cancelled by user.');
 	}
 
 	async validateArgs(args: Record<string, unknown>) {

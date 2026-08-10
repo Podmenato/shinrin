@@ -11,4 +11,7 @@ export interface ModelProvider {
 
 	/** Yields content deltas as they arrive, and returns the final aggregated response. */
 	chatStream(messages: Message[], tools: Tool[]): AsyncGenerator<string, ModelResponse, void>;
+
+	/** Aborts whatever request this provider instance currently has in flight, if any. */
+	abort(): void;
 }

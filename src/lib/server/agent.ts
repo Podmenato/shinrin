@@ -8,12 +8,15 @@ import { eq } from 'drizzle-orm';
 import { agents, sessions } from './db/schema';
 import { getTools, getSubagentTools } from './tools/toolRegistry';
 
-const MAX_ITERATIONS = 10;
+const MAX_ITERATIONS = 20;
+const CANCELLED_MESSAGE = 'Cancelled by user.';
 
 export class Agent {
 	private provider: ModelProvider;
 	private ctx: ContextManager;
 	private tools: Tool[];
+	private controller = new AbortController();
+	private currentTool: Tool | null = null;
 	readonly agentId: string;
 
 	constructor(agentId: string, provider: ModelProvider, ctx: ContextManager, tools: Tool[] = []) {
@@ -86,6 +89,13 @@ export class Agent {
 		await this.ctx.compact(this.provider);
 	}
 
+	/** Interrupts an in-flight `run()`: aborts the current model request or tool call, if any. */
+	async cancel(): Promise<void> {
+		this.controller.abort();
+		this.provider.abort();
+		await this.currentTool?.cancel();
+	}
+
 	async run(prompt: string, onChunk?: (delta: string) => void): Promise<string> {
 		const isStreaming = onChunk !== undefined;
 
@@ -95,21 +105,33 @@ export class Agent {
 		let iterations = 0;
 
 		while (iterations < MAX_ITERATIONS) {
+			if (this.controller.signal.aborted) {
+				break;
+			}
+
 			iterations++;
 			logger.debug({ iteration: iterations }, 'agent iteration');
 
 			let response;
 
-			if (isStreaming) {
-				const stream = this.provider.chatStream(this.ctx.build(), this.tools);
-				let next = await stream.next();
-				while (!next.done) {
-					onChunk(next.value);
-					next = await stream.next();
+			// TODO: not sure about this
+			try {
+				if (isStreaming) {
+					const stream = this.provider.chatStream(this.ctx.build(), this.tools);
+					let next = await stream.next();
+					while (!next.done) {
+						onChunk(next.value);
+						next = await stream.next();
+					}
+					response = next.value;
+				} else {
+					response = await this.provider.chat(this.ctx.build(), this.tools);
 				}
-				response = next.value;
-			} else {
-				response = await this.provider.chat(this.ctx.build(), this.tools);
+			} catch (e) {
+				if (this.controller.signal.aborted) {
+					break;
+				}
+				throw e;
 			}
 
 			const hasToolCalls = response.toolCalls !== undefined && response.toolCalls.length > 0;
@@ -130,21 +152,28 @@ export class Agent {
 
 			if (response.toolCalls !== undefined) {
 				for (const toolCall of response.toolCalls ?? []) {
+					if (this.controller.signal.aborted) {
+						break;
+					}
+
 					logger.info({ tool: toolCall.name, args: toolCall.args }, 'tool call');
 					const tool = this.tools.find((t) => t.definition.name === toolCall.name);
 					if (tool) {
 						let result = '';
+						this.currentTool = tool;
 						try {
 							result = await tool.execute(toolCall.args);
 							logger.debug({ tool: toolCall.name, result }, 'tool result');
 						} catch (e) {
-							if (e instanceof ToolError) {
-								result = e.message;
+							if (this.controller.signal.aborted) {
+								result = CANCELLED_MESSAGE;
+								logger.info({ tool: toolCall.name }, 'tool cancelled');
 							} else {
-								result = JSON.stringify(e);
+								result = e instanceof ToolError ? e.message : JSON.stringify(e);
+								logger.error({ tool: toolCall.name, error: result }, 'tool error');
 							}
-							logger.error({ tool: toolCall.name, error: result }, 'tool error');
 						} finally {
+							this.currentTool = null;
 							const toolMessage: Message = {
 								role: 'tool',
 								content: result,
@@ -156,11 +185,21 @@ export class Agent {
 						logger.warn({ tool: toolCall.name }, 'tool not found');
 					}
 				}
+				if (this.controller.signal.aborted) {
+					break;
+				}
+
 				continue;
 			}
 
 			logger.info('agent run completed');
 			return response.content;
+		}
+
+		if (this.controller.signal.aborted) {
+			logger.info('agent run cancelled');
+			await this.ctx.add({ role: 'assistant', content: CANCELLED_MESSAGE });
+			return CANCELLED_MESSAGE;
 		}
 
 		logger.warn({ maxIterations: MAX_ITERATIONS }, 'max iterations reached');

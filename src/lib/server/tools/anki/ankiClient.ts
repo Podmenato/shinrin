@@ -11,11 +11,13 @@ type AnkiResponse<T> = {
 
 export async function ankiRequest<T>(
 	action: string,
-	params: Record<string, unknown> = {}
+	params: Record<string, unknown> = {},
+	signal: AbortSignal
 ): Promise<T> {
 	const data = await ky
 		.post(ANKI_CONNECT_URL, {
-			json: { action, version: ANKI_CONNECT_VERSION, params }
+			json: { action, version: ANKI_CONNECT_VERSION, params },
+			signal
 		})
 		.json<AnkiResponse<T>>();
 

@@ -6,6 +6,7 @@ import { asc, eq } from 'drizzle-orm';
 import { Agent } from '$lib/server/agent';
 import { OllamaProvider } from '$lib/server/modelProviders/ollamaProvider';
 import { sessionStreams } from '$lib/server/sessionStreamRegistry';
+import { activeAgents } from '$lib/server/activeAgentRegistry';
 import * as v from 'valibot';
 
 /** Returns a session along with its agent, for display in the chat screen header. */
@@ -76,11 +77,18 @@ export const runAgent = command(runSchema, async ({ sessionId, prompt }) => {
 	const provider = new OllamaProvider(session.model);
 	const agent = await Agent.createFromSession(sessionId, provider);
 
+	activeAgents.register(sessionId, agent);
 	sessionStreams.start(sessionId);
 	try {
 		return await agent.run(prompt, (delta) => sessionStreams.append(sessionId, delta));
 	} finally {
 		await getSessionMessages(sessionId).refresh();
 		sessionStreams.end(sessionId);
+		activeAgents.unregister(sessionId);
 	}
+});
+
+/** Cancels a session's in-progress `runAgent` call, if one is active. */
+export const cancelAgent = command(v.pipe(v.string(), v.uuid()), async (sessionId) => {
+	await activeAgents.cancel(sessionId);
 });

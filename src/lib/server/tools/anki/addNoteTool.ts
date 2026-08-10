@@ -42,26 +42,39 @@ export class AddNoteTool implements Tool {
 		]
 	};
 
+	private controller: AbortController | null = null;
+
 	async execute(args: Record<string, unknown>): Promise<string> {
+		this.controller = new AbortController();
+
 		await this.validateArgs(args);
 
 		const tags = ['shinrin', ...((args.tags as string[] | undefined) ?? [])];
 
-		const noteId = await ankiRequest<number>('addNote', {
-			note: {
-				deckName: args.deckName,
-				modelName: args.modelName,
-				fields: args.fields,
-				tags,
-				options: { allowDuplicate: false }
-			}
-		});
+		try {
+			const noteId = await ankiRequest<number>(
+				'addNote',
+				{
+					note: {
+						deckName: args.deckName,
+						modelName: args.modelName,
+						fields: args.fields,
+						tags,
+						options: { allowDuplicate: false }
+					}
+				},
+				this.controller.signal
+			);
 
-		return JSON.stringify({ noteId });
+			return JSON.stringify({ noteId });
+		} finally {
+			this.controller = null;
+		}
 	}
 
 	cancel(): Promise<string> {
-		return Promise.resolve('ok');
+		this.controller?.abort();
+		return Promise.resolve('Cancelled by user.');
 	}
 
 	async validateArgs(args: Record<string, unknown>) {

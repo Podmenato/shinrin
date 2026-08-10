@@ -50,8 +50,21 @@ export class GetNoteInfoTool implements Tool {
 		]
 	};
 
+	private controller: AbortController | null = null;
+
 	async execute(args: Record<string, unknown>): Promise<string> {
-		const notes = await ankiRequest<RawNoteInfo[]>('notesInfo', { notes: args.noteIds });
+		this.controller = new AbortController();
+
+		let notes: RawNoteInfo[];
+		try {
+			notes = await ankiRequest<RawNoteInfo[]>(
+				'notesInfo',
+				{ notes: args.noteIds },
+				this.controller.signal
+			);
+		} finally {
+			this.controller = null;
+		}
 
 		const cleanedNotes = notes.map((note) => {
 			if (note.modelName === KANJI_MODEL) {
@@ -84,6 +97,7 @@ export class GetNoteInfoTool implements Tool {
 	}
 
 	cancel(): Promise<string> {
-		return Promise.resolve('ok');
+		this.controller?.abort();
+		return Promise.resolve('Cancelled by user.');
 	}
 }

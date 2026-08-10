@@ -22,17 +22,28 @@ export class FindTool implements Tool {
 		]
 	};
 
+	private controller: AbortController | null = null;
+
 	async execute(args: Record<string, unknown>): Promise<string> {
+		this.controller = new AbortController();
+
 		const type = args.type === 'note' ? 'note' : 'card';
 		const action = type === 'note' ? 'findNotes' : 'findCards';
 
-		const ids = await ankiRequest<number[]>(action, {
-			query: buildFindQuery(await validateFindArgs(args))
-		});
-		return JSON.stringify(ids);
+		try {
+			const ids = await ankiRequest<number[]>(
+				action,
+				{ query: buildFindQuery(await validateFindArgs(args)) },
+				this.controller.signal
+			);
+			return JSON.stringify(ids);
+		} finally {
+			this.controller = null;
+		}
 	}
 
 	cancel(): Promise<string> {
-		return Promise.resolve('ok');
+		this.controller?.abort();
+		return Promise.resolve('Cancelled by user.');
 	}
 }
