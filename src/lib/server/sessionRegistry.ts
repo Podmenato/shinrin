@@ -2,39 +2,55 @@ import { getRequestEvent } from '$app/server';
 
 type Listener = () => void;
 
+type SessionRun = {
+	controller: AbortController;
+	text: string;
+};
+
 /**
- * Tracks the in-progress assistant reply text per session.
+ * Tracks each session's in-progress `run()`: the `AbortController` a `cancelAgent` request can
+ * act on, and the streamed reply text a `query.live` subscriber watches.
  */
-class SessionStreamRegistry {
-	private streams = new Map<string, string>();
+class SessionRegistry {
+	private runs = new Map<string, SessionRun>();
 	private listeners = new Map<string, Set<Listener>>();
 
-	/** Marks a session as actively generating a reply, starting from an empty string. */
-	start(sessionId: string): void {
-		this.streams.set(sessionId, '');
+	/** Marks a session as actively running, starting from an empty reply. */
+	start(sessionId: string, controller: AbortController): void {
+		this.runs.set(sessionId, { controller, text: '' });
 		this.notify(sessionId);
 	}
 
 	/** Appends a text delta to the session's in-progress reply. */
 	append(sessionId: string, delta: string): void {
-		const text = this.streams.get(sessionId);
-		if (text === undefined) {
+		const run = this.runs.get(sessionId);
+		if (!run) {
 			return;
 		}
 
-		this.streams.set(sessionId, text + delta);
+		run.text += delta;
 		this.notify(sessionId);
 	}
 
-	/** Marks a session as no longer generating a reply. */
+	/** Marks a session as no longer running. */
 	end(sessionId: string): void {
-		this.streams.delete(sessionId);
+		this.runs.delete(sessionId);
 		this.notify(sessionId);
+	}
+
+	/** Cancels the session's active run, if any. Returns whether one was found. */
+	cancel(sessionId: string): boolean {
+		const run = this.runs.get(sessionId);
+		if (!run) {
+			return false;
+		}
+		run.controller.abort();
+		return true;
 	}
 
 	/** The session's current in-progress reply text, or `null` if none is active. */
 	get(sessionId: string): string | null {
-		return this.streams.get(sessionId) ?? null;
+		return this.runs.get(sessionId)?.text ?? null;
 	}
 
 	/**
@@ -91,4 +107,4 @@ class SessionStreamRegistry {
 	}
 }
 
-export const sessionStreams = new SessionStreamRegistry();
+export const sessionRegistry = new SessionRegistry();

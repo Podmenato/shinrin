@@ -42,45 +42,32 @@ export class AddNoteTool implements Tool {
 		]
 	};
 
-	private controller: AbortController | null = null;
-
-	async execute(args: Record<string, unknown>): Promise<string> {
-		this.controller = new AbortController();
-
-		await this.validateArgs(args);
+	async execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string> {
+		await this.validateArgs(args, signal);
 
 		const tags = ['shinrin', ...((args.tags as string[] | undefined) ?? [])];
 
-		try {
-			const noteId = await ankiRequest<number>(
-				'addNote',
-				{
-					note: {
-						deckName: args.deckName,
-						modelName: args.modelName,
-						fields: args.fields,
-						tags,
-						options: { allowDuplicate: false }
-					}
-				},
-				this.controller.signal
-			);
+		const noteId = await ankiRequest<number>(
+			'addNote',
+			{
+				note: {
+					deckName: args.deckName,
+					modelName: args.modelName,
+					fields: args.fields,
+					tags,
+					options: { allowDuplicate: false }
+				}
+			},
+			signal
+		);
 
-			return JSON.stringify({ noteId });
-		} finally {
-			this.controller = null;
-		}
+		return JSON.stringify({ noteId });
 	}
 
-	cancel(): Promise<string> {
-		this.controller?.abort();
-		return Promise.resolve('Cancelled by user.');
-	}
-
-	async validateArgs(args: Record<string, unknown>) {
+	async validateArgs(args: Record<string, unknown>, signal: AbortSignal) {
 		const [decks, modelsRaw] = await Promise.all([
-			new GetDecksTool().execute(),
-			new GetModelsTool().execute()
+			new GetDecksTool().execute({}, signal),
+			new GetModelsTool().execute({}, signal)
 		]);
 
 		const deckList = JSON.parse(decks) as string[];

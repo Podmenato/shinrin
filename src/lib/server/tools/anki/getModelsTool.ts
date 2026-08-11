@@ -8,28 +8,14 @@ export class GetModelsTool implements Tool {
 		parameters: []
 	};
 
-	private controller: AbortController | null = null;
-
-	async execute(): Promise<string> {
-		this.controller = new AbortController();
-		const { signal } = this.controller;
-
-		try {
-			const modelNames = await ankiRequest<string[]>('modelNames', {}, signal);
-			const modelWithFieldNames = await Promise.all(
-				modelNames.map(async (modelName) => {
-					const fieldNames = await ankiRequest<string[]>('modelFieldNames', { modelName }, signal);
-					return [modelName, fieldNames] as [string, string[]];
-				})
-			);
-			return JSON.stringify(Object.fromEntries(modelWithFieldNames));
-		} finally {
-			this.controller = null;
-		}
-	}
-
-	cancel(): Promise<string> {
-		this.controller?.abort();
-		return Promise.resolve('Cancelled by user.');
+	async execute(_args: Record<string, unknown>, signal: AbortSignal): Promise<string> {
+		const modelNames = await ankiRequest<string[]>('modelNames', {}, signal);
+		const modelWithFieldNames = await Promise.all(
+			modelNames.map(async (modelName) => {
+				const fieldNames = await ankiRequest<string[]>('modelFieldNames', { modelName }, signal);
+				return [modelName, fieldNames] as [string, string[]];
+			})
+		);
+		return JSON.stringify(Object.fromEntries(modelWithFieldNames));
 	}
 }

@@ -42,8 +42,4 @@ export class DeleteMemoryTool implements Tool {
 
 		return `Memory deleted: "${key}"`;
 	}
-
-	cancel(): Promise<string> {
-		return Promise.resolve('ok');
-	}
 }

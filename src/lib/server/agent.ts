@@ -15,8 +15,6 @@ export class Agent {
 	private provider: ModelProvider;
 	private ctx: ContextManager;
 	private tools: Tool[];
-	private controller = new AbortController();
-	private currentTool: Tool | null = null;
 	readonly agentId: string;
 
 	constructor(agentId: string, provider: ModelProvider, ctx: ContextManager, tools: Tool[] = []) {
@@ -89,14 +87,11 @@ export class Agent {
 		await this.ctx.compact(this.provider);
 	}
 
-	/** Interrupts an in-flight `run()`: aborts the current model request or tool call, if any. */
-	async cancel(): Promise<void> {
-		this.controller.abort();
-		this.provider.abort();
-		await this.currentTool?.cancel();
-	}
-
-	async run(prompt: string, onChunk?: (delta: string) => void): Promise<string> {
+	async run(
+		prompt: string,
+		onChunk: ((delta: string) => void) | undefined,
+		signal: AbortSignal
+	): Promise<string> {
 		const isStreaming = onChunk !== undefined;
 
 		await this.ctx.add({ role: 'user', content: prompt });
@@ -105,7 +100,7 @@ export class Agent {
 		let iterations = 0;
 
 		while (iterations < MAX_ITERATIONS) {
-			if (this.controller.signal.aborted) {
+			if (signal.aborted) {
 				break;
 			}
 
@@ -117,7 +112,7 @@ export class Agent {
 			// TODO: not sure about this
 			try {
 				if (isStreaming) {
-					const stream = this.provider.chatStream(this.ctx.build(), this.tools);
+					const stream = this.provider.chatStream(this.ctx.build(), this.tools, signal);
 					let next = await stream.next();
 					while (!next.done) {
 						onChunk(next.value);
@@ -125,10 +120,10 @@ export class Agent {
 					}
 					response = next.value;
 				} else {
-					response = await this.provider.chat(this.ctx.build(), this.tools);
+					response = await this.provider.chat(this.ctx.build(), this.tools, signal);
 				}
 			} catch (e) {
-				if (this.controller.signal.aborted) {
+				if (signal.aborted) {
 					break;
 				}
 				throw e;
@@ -152,7 +147,7 @@ export class Agent {
 
 			if (response.toolCalls !== undefined) {
 				for (const toolCall of response.toolCalls ?? []) {
-					if (this.controller.signal.aborted) {
+					if (signal.aborted) {
 						break;
 					}
 
@@ -160,12 +155,11 @@ export class Agent {
 					const tool = this.tools.find((t) => t.definition.name === toolCall.name);
 					if (tool) {
 						let result = '';
-						this.currentTool = tool;
 						try {
-							result = await tool.execute(toolCall.args);
+							result = await tool.execute(toolCall.args, signal);
 							logger.debug({ tool: toolCall.name, result }, 'tool result');
 						} catch (e) {
-							if (this.controller.signal.aborted) {
+							if (signal.aborted) {
 								result = CANCELLED_MESSAGE;
 								logger.info({ tool: toolCall.name }, 'tool cancelled');
 							} else {
@@ -173,7 +167,6 @@ export class Agent {
 								logger.error({ tool: toolCall.name, error: result }, 'tool error');
 							}
 						} finally {
-							this.currentTool = null;
 							const toolMessage: Message = {
 								role: 'tool',
 								content: result,
@@ -185,7 +178,7 @@ export class Agent {
 						logger.warn({ tool: toolCall.name }, 'tool not found');
 					}
 				}
-				if (this.controller.signal.aborted) {
+				if (signal.aborted) {
 					break;
 				}
 
@@ -196,7 +189,7 @@ export class Agent {
 			return response.content;
 		}
 
-		if (this.controller.signal.aborted) {
+		if (signal.aborted) {
 			logger.info('agent run cancelled');
 			await this.ctx.add({ role: 'assistant', content: CANCELLED_MESSAGE });
 			return CANCELLED_MESSAGE;

@@ -64,8 +64,4 @@ export class CreateTopicTool implements Tool {
 
 		return `Topic created: "${topic}" → ${status}`;
 	}
-
-	cancel(): Promise<string> {
-		return Promise.resolve('ok');
-	}
 }

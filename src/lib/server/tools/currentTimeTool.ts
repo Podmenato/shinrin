@@ -11,10 +11,6 @@ export class CurrentTimeTool implements Tool {
 		};
 	}
 
-	cancel(): Promise<string> {
-		return Promise.resolve('ok');
-	}
-
 	execute(): Promise<string> {
 		return Promise.resolve(new Date().toISOString());
 	}

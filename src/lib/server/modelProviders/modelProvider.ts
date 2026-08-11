@@ -7,11 +7,12 @@ export type ModelResponse = {
 };
 
 export interface ModelProvider {
-	chat(messages: Message[], tools: Tool[]): Promise<ModelResponse>;
+	chat(messages: Message[], tools: Tool[], signal: AbortSignal): Promise<ModelResponse>;
 
 	/** Yields content deltas as they arrive, and returns the final aggregated response. */
-	chatStream(messages: Message[], tools: Tool[]): AsyncGenerator<string, ModelResponse, void>;
-
-	/** Aborts whatever request this provider instance currently has in flight, if any. */
-	abort(): void;
+	chatStream(
+		messages: Message[],
+		tools: Tool[],
+		signal: AbortSignal
+	): AsyncGenerator<string, ModelResponse, void>;
 }

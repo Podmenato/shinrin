@@ -21,6 +21,5 @@ export class ToolError extends Error {
 
 export interface Tool {
 	definition: ToolDefinition;
-	execute(args: Record<string, unknown>): Promise<string>;
-	cancel(): Promise<string>;
+	execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string>;
 }

@@ -56,67 +56,56 @@ export class AddSentenceNoteTool implements Tool {
 		]
 	};
 
-	private controller: AbortController | null = null;
-
-	async execute(args: Record<string, unknown>): Promise<string> {
-		this.controller = new AbortController();
-
-		const { decks, sentence, translation, reading, notes, tags } = await this.validateArgs(args);
+	async execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string> {
+		const { decks, sentence, translation, reading, notes, tags } = await this.validateArgs(
+			args,
+			signal
+		);
 		const [readingDeck, productionDeck, listeningDeck] = decks;
 
-		const { signal } = this.controller;
-		try {
-			const noteId = await ankiRequest<number>(
-				'addNote',
-				{
-					note: {
-						deckName: readingDeck,
-						modelName: MODEL_NAME,
-						fields: {
-							Sentence: sentence,
-							Translation: translation,
-							Reading: reading,
-							Notes: notes
-						},
-						tags: ['shinrin', ...tags],
-						options: { allowDuplicate: false }
-					}
-				},
-				signal
-			);
-
-			const [{ cards }] = await ankiRequest<{ cards: number[] }[]>(
-				'notesInfo',
-				{ notes: [noteId] },
-				signal
-			);
-			const [readingCard, productionCard, listeningCard] = cards;
-
-			await Promise.all([
-				ankiRequest('changeDeck', { cards: [productionCard], deck: productionDeck }, signal),
-				ankiRequest('changeDeck', { cards: [listeningCard], deck: listeningDeck }, signal)
-			]);
-
-			return JSON.stringify({
-				noteId,
-				cards: {
-					reading: { deck: readingDeck, cardId: readingCard },
-					production: { deck: productionDeck, cardId: productionCard },
-					listening: { deck: listeningDeck, cardId: listeningCard }
+		const noteId = await ankiRequest<number>(
+			'addNote',
+			{
+				note: {
+					deckName: readingDeck,
+					modelName: MODEL_NAME,
+					fields: {
+						Sentence: sentence,
+						Translation: translation,
+						Reading: reading,
+						Notes: notes
+					},
+					tags: ['shinrin', ...tags],
+					options: { allowDuplicate: false }
 				}
-			});
-		} finally {
-			this.controller = null;
-		}
+			},
+			signal
+		);
+
+		const [{ cards }] = await ankiRequest<{ cards: number[] }[]>(
+			'notesInfo',
+			{ notes: [noteId] },
+			signal
+		);
+		const [readingCard, productionCard, listeningCard] = cards;
+
+		await Promise.all([
+			ankiRequest('changeDeck', { cards: [productionCard], deck: productionDeck }, signal),
+			ankiRequest('changeDeck', { cards: [listeningCard], deck: listeningDeck }, signal)
+		]);
+
+		return JSON.stringify({
+			noteId,
+			cards: {
+				reading: { deck: readingDeck, cardId: readingCard },
+				production: { deck: productionDeck, cardId: productionCard },
+				listening: { deck: listeningDeck, cardId: listeningCard }
+			}
+		});
 	}
 
-	cancel(): Promise<string> {
-		this.controller?.abort();
-		return Promise.resolve('Cancelled by user.');
-	}
-
-	async validateArgs(args: Record<string, unknown>) {
-		const deckList = JSON.parse(await new GetDecksTool().execute()) as string[];
+	async validateArgs(args: Record<string, unknown>, signal: AbortSignal) {
+		const deckList = JSON.parse(await new GetDecksTool().execute({}, signal)) as string[];
 
 		if (!Array.isArray(args.decks) || args.decks.length !== 3) {
 			throw new ToolError(

@@ -49,8 +49,4 @@ export class UpdateTopicTool implements Tool {
 
 		return `Topic updated: "${existing.topic}"`;
 	}
-
-	cancel(): Promise<string> {
-		return Promise.resolve('ok');
-	}
 }

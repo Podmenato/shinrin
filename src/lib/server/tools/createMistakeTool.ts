@@ -43,8 +43,4 @@ export class CreateMistakeTool implements Tool {
 
 		return 'Mistake logged.';
 	}
-
-	cancel(): Promise<string> {
-		return Promise.resolve('ok');
-	}
 }

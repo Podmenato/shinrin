@@ -94,8 +94,11 @@ export const FIND_DESCRIPTION =
 	'  Use * as wildcard: *犬* matches any field value containing 犬\n' +
 	'  field:Expression term:*犬* → Expression field contains 犬';
 
-export async function validateFindArgs(args: Record<string, unknown>): Promise<FindArgs> {
-	const decks = JSON.parse(await new GetDecksTool().execute()) as string[];
+export async function validateFindArgs(
+	args: Record<string, unknown>,
+	signal: AbortSignal
+): Promise<FindArgs> {
+	const decks = JSON.parse(await new GetDecksTool().execute({}, signal)) as string[];
 
 	if (typeof args.deck !== 'string' || args.deck.trim() === '') {
 		throw new ToolError('deck must be a non-empty string.');

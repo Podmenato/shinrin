@@ -5,8 +5,7 @@ import { messages, sessions } from '$lib/server/db/schema';
 import { asc, eq } from 'drizzle-orm';
 import { Agent } from '$lib/server/agent';
 import { OllamaProvider } from '$lib/server/modelProviders/ollamaProvider';
-import { sessionStreams } from '$lib/server/sessionStreamRegistry';
-import { activeAgents } from '$lib/server/activeAgentRegistry';
+import { sessionRegistry } from '$lib/server/sessionRegistry';
 import * as v from 'valibot';
 
 /** Returns a session along with its agent, for display in the chat screen header. */
@@ -30,7 +29,7 @@ export const getSession = query(v.pipe(v.string(), v.uuid()), async (sessionId) 
  * this with a client-side `$effect` that force-refreshes once generation ends. The correct
  * fix is to make this a `query.live()` backed by a notify signal fired from
  * `ContextManager.add()` (the one choke point every persisted message goes through), using
- * the same abort-aware wait/notify shape as `SessionStreamRegistry`. That would also be the
+ * the same abort-aware wait/notify shape as `SessionRegistry`. That would also be the
  * natural foundation for live tool-call-in-progress visibility (see project roadmap), since
  * both problems are "the message list should update live, not just once at the end."
  */
@@ -63,7 +62,7 @@ const runSchema = v.object({
 
 /** Streams the in-progress assistant reply for a session; `null` while no run is active. */
 export const getStreamingReply = query.live(v.pipe(v.string(), v.uuid()), (sessionId) =>
-	sessionStreams.subscribe(sessionId)
+	sessionRegistry.subscribe(sessionId)
 );
 
 /** Runs the agent for the given session with the provided prompt. */
@@ -76,19 +75,22 @@ export const runAgent = command(runSchema, async ({ sessionId, prompt }) => {
 	// TODO: make provider independent
 	const provider = new OllamaProvider(session.model);
 	const agent = await Agent.createFromSession(sessionId, provider);
+	const controller = new AbortController();
 
-	activeAgents.register(sessionId, agent);
-	sessionStreams.start(sessionId);
+	sessionRegistry.start(sessionId, controller);
 	try {
-		return await agent.run(prompt, (delta) => sessionStreams.append(sessionId, delta));
+		return await agent.run(
+			prompt,
+			(delta) => sessionRegistry.append(sessionId, delta),
+			controller.signal
+		);
 	} finally {
 		await getSessionMessages(sessionId).refresh();
-		sessionStreams.end(sessionId);
-		activeAgents.unregister(sessionId);
+		sessionRegistry.end(sessionId);
 	}
 });
 
 /** Cancels a session's in-progress `runAgent` call, if one is active. */
 export const cancelAgent = command(v.pipe(v.string(), v.uuid()), async (sessionId) => {
-	await activeAgents.cancel(sessionId);
+	sessionRegistry.cancel(sessionId);
 });

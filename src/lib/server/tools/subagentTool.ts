@@ -6,8 +6,6 @@ import { OllamaProvider } from '../modelProviders/ollamaProvider';
 /** Wraps another agent as a tool: calling it runs a full nested agent loop and returns its final reply. */
 export class SubagentTool implements Tool {
 	definition: ToolDefinition;
-	private agent: Agent | null = null;
-	private controller: AbortController | null = null;
 
 	constructor(
 		private subagentId: string,
@@ -30,13 +28,11 @@ export class SubagentTool implements Tool {
 		};
 	}
 
-	async execute(args: Record<string, unknown>): Promise<string> {
+	async execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string> {
 		const input = args.input;
 		if (typeof input !== 'string') {
 			throw new ToolError('input must be a string');
 		}
-
-		this.controller = new AbortController();
 
 		// TODO: needs provider as a agent attribute + provider registry
 		const provider = new OllamaProvider(this.model);
@@ -48,22 +44,6 @@ export class SubagentTool implements Tool {
 			this.parentSessionId
 		);
 
-		if (this.controller.signal.aborted) {
-			return 'Cancelled by user.';
-		}
-
-		this.agent = agent;
-		try {
-			return await agent.run(input);
-		} finally {
-			this.agent = null;
-			this.controller = null;
-		}
-	}
-
-	async cancel(): Promise<string> {
-		this.controller?.abort();
-		await this.agent?.cancel();
-		return 'Cancelled by user.';
+		return agent.run(input, undefined, signal);
 	}
 }

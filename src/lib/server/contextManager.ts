@@ -129,7 +129,8 @@ export class ContextManager {
 			{ role: 'user', content: COMPACTION_INSTRUCTION }
 		];
 
-		const response = await provider.chat(messages, []);
+		// TODO: hack to satisfy the type, needs to get an actual signal
+		const response = await provider.chat(messages, [], new AbortController().signal);
 
 		await db
 			.update(sessionsTable)

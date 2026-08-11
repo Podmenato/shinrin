@@ -49,8 +49,4 @@ export class UpdateMistakeTool implements Tool {
 
 		return `Mistake updated: "${existing.title}"`;
 	}
-
-	cancel(): Promise<string> {
-		return Promise.resolve('ok');
-	}
 }

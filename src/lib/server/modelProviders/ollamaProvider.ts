@@ -54,9 +54,9 @@ export class OllamaProvider implements ModelProvider {
 	// Delegates to chatStream and drains it rather than issuing its own `stream: false` request:
 	// the underlying `ollama` client only ever attaches an AbortController to the streaming code
 	// path (see `processStreamableRequest` in its source) — a plain non-streaming request has no
-	// signal at all, so it's the only way to make `chat()` abortable via `abort()` below.
-	async chat(messages: Message[], tools: Tool[]): Promise<ModelResponse> {
-		const stream = this.chatStream(messages, tools);
+	// signal at all, so it's the only way to make `chat()` respect `signal`.
+	async chat(messages: Message[], tools: Tool[], signal: AbortSignal): Promise<ModelResponse> {
+		const stream = this.chatStream(messages, tools, signal);
 		let next = await stream.next();
 		while (!next.done) {
 			next = await stream.next();
@@ -66,7 +66,8 @@ export class OllamaProvider implements ModelProvider {
 
 	async *chatStream(
 		messages: Message[],
-		tools: Tool[]
+		tools: Tool[],
+		signal: AbortSignal
 	): AsyncGenerator<string, ModelResponse, void> {
 		logger.debug(
 			{ model: this.model, messageCount: messages.length },
@@ -74,47 +75,53 @@ export class OllamaProvider implements ModelProvider {
 		);
 		logger.trace({ messages }, 'context');
 
-		const stream = await this.ollama.chat({
-			model: this.model,
-			messages: messages.map(toOllamaMessage),
-			tools: tools.map(toOllamaTool),
-			options: { num_ctx: NUM_CTX },
-			stream: true
-		});
+		// `ollama` doesn't accept an external AbortSignal directly — it only tracks its own
+		// internally-created controller per request and exposes an imperative `abort()` on the
+		// client. Bridge our signal to that instead.
+		const onAbort = () => this.ollama.abort();
+		signal.addEventListener('abort', onAbort, { once: true });
 
-		let content = '';
-		let toolCalls: ModelResponse['toolCalls'];
+		try {
+			const stream = await this.ollama.chat({
+				model: this.model,
+				messages: messages.map(toOllamaMessage),
+				tools: tools.map(toOllamaTool),
+				options: { num_ctx: NUM_CTX },
+				stream: true
+			});
 
-		// for debug logs
-		let promptTokens: number | undefined;
-		let responseTokens: number | undefined;
+			let content = '';
+			let toolCalls: ModelResponse['toolCalls'];
 
-		for await (const chunk of stream) {
-			if (chunk.message.content) {
-				content += chunk.message.content;
-				yield chunk.message.content;
+			// for debug logs
+			let promptTokens: number | undefined;
+			let responseTokens: number | undefined;
+
+			for await (const chunk of stream) {
+				if (chunk.message.content) {
+					content += chunk.message.content;
+					yield chunk.message.content;
+				}
+				if (chunk.message.tool_calls?.length) {
+					toolCalls = chunk.message.tool_calls.map((tc) => ({
+						name: tc.function.name,
+						args: tc.function.arguments
+					}));
+				}
+				if (chunk.done) {
+					promptTokens = chunk.prompt_eval_count;
+					responseTokens = chunk.eval_count;
+				}
 			}
-			if (chunk.message.tool_calls?.length) {
-				toolCalls = chunk.message.tool_calls.map((tc) => ({
-					name: tc.function.name,
-					args: tc.function.arguments
-				}));
-			}
-			if (chunk.done) {
-				promptTokens = chunk.prompt_eval_count;
-				responseTokens = chunk.eval_count;
-			}
+
+			logger.debug(
+				{ hasToolCalls: !!toolCalls?.length, promptTokens, responseTokens },
+				'received streaming chat response'
+			);
+
+			return { content, toolCalls };
+		} finally {
+			signal.removeEventListener('abort', onAbort);
 		}
-
-		logger.debug(
-			{ hasToolCalls: !!toolCalls?.length, promptTokens, responseTokens },
-			'received streaming chat response'
-		);
-
-		return { content, toolCalls };
-	}
-
-	abort(): void {
-		this.ollama.abort();
 	}
 }

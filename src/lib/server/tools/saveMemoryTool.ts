@@ -43,8 +43,4 @@ export class SaveMemoryTool implements Tool {
 
 		return `Memory saved: "${key}"`;
 	}
-
-	cancel(): Promise<string> {
-		return Promise.resolve('ok');
-	}
 }
