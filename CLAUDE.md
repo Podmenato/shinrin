@@ -19,18 +19,74 @@ progress, mistake logs).
 
 - [src/lib/server/agent.ts](src/lib/server/agent.ts) — `Agent` class: the
   run loop that talks to a `ModelProvider`, executes tool calls, and persists
-  turns via `ContextManager`. Max 7 iterations per `run()`.
+  turns via `ContextManager`. Max 20 iterations per `run(prompt, onChunk, signal)`.
 - [src/lib/server/contextManager.ts](src/lib/server/contextManager.ts) —
   builds the message list sent to the model and persists messages/tool calls
   to Postgres (`messages`, `message_tool_calls` tables).
 - [src/lib/server/modelProviders/](src/lib/server/modelProviders/) —
   `ModelProvider` interface; `OllamaProvider` is the current implementation.
+- **Cancellation** is `AbortSignal`-based, threaded top-down as a plain
+  parameter rather than stored as instance state anywhere.
+  [sessions.remote.ts](src/lib/sessions.remote.ts)'s `runAgent` creates one
+  `AbortController` per call and passes `.signal` into `Agent.run(...)`;
+  `run()` checks `signal.aborted` at loop/tool-call checkpoints and, on an
+  abort-triggered rejection from the model call or a tool, resolves
+  *normally* with `"Cancelled by user."` (persisted as the final assistant
+  message) instead of throwing — the `runAgent` caller never sees an error.
+  `Tool.execute(args, signal)` and `ModelProvider.chat`/`chatStream(...,
+  signal)` take the same signal directly; there is no `Tool.cancel()`
+  method. An earlier design gave each tool its own `AbortController` plus a
+  `cancel()` method that `Agent` forwarded to via a `currentTool` field —
+  replaced after hitting a real race: [SubagentTool](src/lib/server/tools/subagentTool.ts)
+  needed to hold a reference to a not-yet-constructed nested `Agent`
+  (`Agent.create` does several DB round trips), and a cancel arriving in
+  that window had nothing to forward to and was silently dropped. Passing
+  one signal straight through instead closes that off by construction —
+  `SubagentTool` now just hands the exact signal it receives into the
+  nested `Agent.create(...)`/`run(...)` call, so cancellation reaches
+  arbitrarily deep subagent chains for free (every level uses the identical
+  mechanism recursively, not a bespoke forwarding chain), and there's never
+  a window where the target of cancellation doesn't exist yet.
+  [OllamaProvider](src/lib/server/modelProviders/ollamaProvider.ts) bridges
+  the signal to `ollama`'s own imperative `abort()` via
+  `signal.addEventListener('abort', ...)`, since the `ollama` package never
+  accepts an external `AbortSignal` — it only ever attaches one internally,
+  and only on the streaming code path, which is why `chat()` (non-streaming)
+  delegates to `chatStream()` internally rather than issuing its own
+  `stream: false` request. [sessionRegistry.ts](src/lib/server/sessionRegistry.ts)
+  is a process-wide singleton mapping `sessionId` → `{ controller, text }`,
+  letting a separate `cancelAgent` request (a different HTTP request than
+  the one running `runAgent`) find and abort the right in-flight run; it
+  also carries the streamed-reply-text/listener bookkeeping that used to be
+  a separate `SessionStreamRegistry` — merged because both shared the exact
+  same start/end lifecycle, and keeping them apart meant register/unregister
+  order across two collaborators had to be reasoned about by hand (see git
+  history for the bug that motivated this: unregistering the cancel handle
+  before an `await` elsewhere in the same `finally` left a window where
+  Cancel was clickable but silently did nothing). Not all tools are
+  meaningfully cancellable: `save_memory`/`delete_memory`/`create_topic`/
+  `update_topic`/`create_mistake`/`update_mistake` do a single fast Postgres
+  write and ignore the signal entirely — `drizzle-orm` has no query
+  cancellation support (an `AbortSignal`-param feature request has been open
+  since Dec 2023 with no movement,
+  [drizzle-team/drizzle-orm#1602](https://github.com/drizzle-team/drizzle-orm/issues/1602)) —
+  while every Anki tool threads the signal straight into its
+  `ankiRequest`/`ky` call and is genuinely abortable.
 - [src/lib/server/tools/toolRegistry.ts](src/lib/server/tools/toolRegistry.ts) —
   maps tool names (as stored in the `tools` DB table / an agent's
   `agent_tools`) to `Tool` implementations. Some tools are contextual (need
   `agentId` and/or `subjectId` from `ToolContext`), e.g. memory tools
   (`agentId` only) and `create_topic`/`create_mistake` (`subjectId`, required
-  — see "Subjects" below).
+  — see "Subjects" below). `registry`/`contextualRegistry` are both factory
+  maps (`Record<string, () => Tool>` / `Record<string, (ctx) => Tool>`), not
+  eager singletons — `getTools`/`getSubagentTools` build fresh instances on
+  every call, so every session gets private `Tool` objects instead of
+  sharing one instance across every session in the process. This was
+  originally required so per-tool `AbortController`s (from the earlier
+  cancellation design above) couldn't leak across concurrent sessions; tools
+  hold no per-call state at all anymore under the signal-based design, so
+  it's no longer load-bearing for that specific reason, but it's harmless
+  and left as-is rather than reverted back to singletons.
 - DB rows drive config: an `agents` row defines a system prompt and which
   tools it has (via `agent_tools`); a `sessions` row is one conversation
   with a chosen model; `memories` is per-agent persistent state; `study_topics`
@@ -113,8 +169,24 @@ progress, mistake logs).
   transcript (`getSessionMessages`) + composer (`runAgent`); agent/model are
   shown read-only there since both are fixed per session at creation time
   ([schema.ts](src/lib/server/db/schema.ts) `sessions.agentId`/`model`).
-  No streaming yet — submitting shows a pending state (`command.pending`)
-  until the full reply resolves; `models.remote.ts` is superseded by
+  The in-progress reply streams live via `getStreamingReply` (`query.live`,
+  see "Remote functions" below) instead of waiting for the full response.
+  Both screens also render a red square icon `Button` (`variant="destructive"
+  size="icon"`) while a run is active, calling `cancelAgent` (see
+  Cancellation above for the server-side mechanism). Its `isLoading` state
+  is driven by a local `stopping` flag — set the instant the button is
+  clicked, cleared in `send()`/`startChat()`'s own `finally` once `runAgent`
+  itself settles, *not* by a `$effect` watching `isSending` (a `$effect`
+  version was tried and reverted — using an effect to sync one piece of
+  state off another, instead of reacting to something genuinely external,
+  is exactly the pattern Svelte's own docs call out as the thing to avoid).
+  This also isn't the same as watching `cancelAgent`'s own pending state,
+  which resolves almost immediately — well before the underlying run has
+  actually wound down — so `stopping` stays true for the whole cancellation
+  span, paired with a "Stopping…" text line, since without it the button
+  just looks inert for however long cancellation actually takes to land,
+  which reads as broken rather than in-progress.
+  `models.remote.ts` is superseded by
   [ollamaAdmin.remote.ts](src/lib/ollamaAdmin.remote.ts)'s `getAvailableModels`.
 - **Markdown rendering** — `src/lib/markdown/` (`parser.ts` +
   `Markdown.svelte`/`MarkdownBlock.svelte`/`MarkdownInline.svelte`) parses a
