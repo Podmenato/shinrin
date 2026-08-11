@@ -41,8 +41,8 @@ there was no export/import step — just a schema rewrite.
   module in that ecosystem, not exploratory risk.
 - **Id/timestamp/json column conventions**, all in
   [schema.ts](src/lib/server/db/schema.ts): SQLite has no native
-  uuid/boolean/timestamp types, so `id()`/`createdAt()`/`updatedAt()` are
-  small local helper functions (not exported — just factored out of the
+  uuid/boolean/timestamp types, so `generateUUID()`/`createdAt()`/`updatedAt()`
+  are small local helper functions (not exported — just factored out of the
   per-table repetition) wrapping `text().$defaultFn(() =>
   crypto.randomUUID())` and `integer({ mode: 'timestamp_ms' })`. Timestamps
   are **app-generated (`$defaultFn(() => new Date())`), not DB-generated**
@@ -70,6 +70,34 @@ there was no export/import step — just a schema rewrite.
   `POSTGRES_*` env vars — no server process to containerize anymore.
   `DATABASE_URL` is now a plain filesystem path (`.data/dev.sqlite3` /
   `.data/prod.sqlite3`, both gitignored).
+- **`db.transaction()` callbacks must be plain, non-`async` functions with no
+  `await` inside** — `better-sqlite3`'s underlying `.transaction()` wrapper
+  runs the callback synchronously and throws `Transaction function cannot
+  return a promise` if the return value is thenable, which an `async`
+  function's return value always is, regardless of what's inside it. This
+  bit real code on the first migration pass: `postgres-js` transactions are
+  async, so `saveAgent`/`deleteSession` in
+  [agents.remote.ts](src/lib/agents.remote.ts) both used `async (tx) => {…}`
+  callbacks with `await`ed queries — worked fine under Postgres, 500'd
+  immediately under sqlite. Fix, confirmed by reading the installed
+  `better-sqlite3`/`drizzle-orm` source and testing directly against a real
+  db rather than guessing from docs: drop `async`, drop every `await` inside
+  the callback, and call `.all()` (row-returning queries) or `.run()`
+  (`delete`/plain `update`) explicitly on each query — the sync-mode query
+  builder is a thenable that only executes once you either `await` it or
+  call one of these terminal methods directly; without either, returning it
+  bare also trips the same "thenable" check. `saveAgent`'s cycle-check
+  originally called an `async` helper (`computeAncestorIds`, itself reading
+  via the outer non-transactional `db`) — extracted the pure graph-BFS into
+  a sync `ancestorsFromEdges(edges, agentId)` so it can run inline inside
+  the sync transaction (`tx.select().from(agentSubagents).all()`) instead of
+  needing an awaited call. These are currently the *only* two
+  `db.transaction()` call sites in the app — chat message persistence
+  ([contextManager.ts](src/lib/server/contextManager.ts)) never used
+  `db.transaction()` at all (plain sequential `await db.insert(...)` calls,
+  no atomicity wrapper), so it was never affected by this and has a
+  pre-existing, separate gap: a mid-write crash could leave a message
+  persisted without its tool calls.
 
 ## How the agent works
 
