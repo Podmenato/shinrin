@@ -57,12 +57,16 @@ export const getAgentById = query(v.pipe(v.string(), v.uuid()), async (id) => {
 });
 
 /**
- * Walks the `agent_subagents` graph backward from `agentId` to find every agent that can
+ * Walks the `agent_subagents` edge list backward from `agentId` to find every agent that can
  * already reach it (directly or transitively). Assigning any of these as a subagent of
- * `agentId` would close a cycle.
+ * `agentId` would close a cycle. Pure/sync so it can run both outside a transaction (via
+ * `computeAncestorIds` below) and inside `saveAgent`'s sync `db.transaction` callback, where
+ * `await`ing a query isn't an option.
  */
-async function computeAncestorIds(agentId: string): Promise<Set<string>> {
-	const edges = await db.select().from(agentSubagents);
+function ancestorsFromEdges(
+	edges: { agentId: string; subagentId: string }[],
+	agentId: string
+): Set<string> {
 	const parentsOf = new Map<string, string[]>();
 	for (const edge of edges) {
 		if (!parentsOf.has(edge.subagentId)) parentsOf.set(edge.subagentId, []);
@@ -81,6 +85,11 @@ async function computeAncestorIds(agentId: string): Promise<Set<string>> {
 		}
 	}
 	return ancestors;
+}
+
+async function computeAncestorIds(agentId: string): Promise<Set<string>> {
+	const edges = await db.select().from(agentSubagents);
+	return ancestorsFromEdges(edges, agentId);
 }
 
 /**
@@ -156,19 +165,23 @@ export const createSession = command(
 
 /** Permanently deletes a session along with its messages and their tool calls. */
 export const deleteSession = command(v.pipe(v.string(), v.uuid()), async (id) => {
-	await db.transaction(async (tx) => {
-		const sessionMessages = await tx
+	// Sync, non-async callback: better-sqlite3's transaction wrapper throws if the callback
+	// returns a promise, so every query inside needs an explicit sync terminator (.all()/.run())
+	// instead of await.
+	db.transaction((tx) => {
+		const sessionMessages = tx
 			.select({ id: messages.id })
 			.from(messages)
-			.where(eq(messages.sessionId, id));
+			.where(eq(messages.sessionId, id))
+			.all();
 		const messageIds = sessionMessages.map((m) => m.id);
 
 		if (messageIds.length > 0) {
-			await tx.delete(messageToolCalls).where(inArray(messageToolCalls.messageId, messageIds));
-			await tx.delete(messages).where(eq(messages.sessionId, id));
+			tx.delete(messageToolCalls).where(inArray(messageToolCalls.messageId, messageIds)).run();
+			tx.delete(messages).where(eq(messages.sessionId, id)).run();
 		}
 
-		await tx.delete(sessions).where(eq(sessions.id, id));
+		tx.delete(sessions).where(eq(sessions.id, id)).run();
 	});
 	await getAllSessions().refresh();
 });
@@ -197,7 +210,8 @@ export const saveAgent = form(
 		toolIds,
 		subagentIds
 	}) => {
-		const agent = await db.transaction(async (tx) => {
+		// Sync, non-async callback — see the comment in deleteSession above.
+		const agent = db.transaction((tx) => {
 			const values = {
 				name,
 				systemPrompt: systemPrompt.trim() === '' ? null : systemPrompt,
@@ -210,45 +224,48 @@ export const saveAgent = form(
 
 			let agent;
 			if (id) {
-				[agent] = await tx
+				[agent] = tx
 					.update(agents)
 					.set({ ...values, updatedAt: new Date() })
 					.where(eq(agents.id, id))
-					.returning();
+					.returning()
+					.all();
 				if (!agent) {
 					error(404, 'Agent not found');
 				}
-				await tx.delete(agentTools).where(eq(agentTools.agentId, id));
-				await tx.delete(agentSubagents).where(eq(agentSubagents.agentId, id));
+				tx.delete(agentTools).where(eq(agentTools.agentId, id)).run();
+				tx.delete(agentSubagents).where(eq(agentSubagents.agentId, id)).run();
 			} else {
-				[agent] = await tx.insert(agents).values(values).returning();
+				[agent] = tx.insert(agents).values(values).returning().all();
 			}
 
 			if (toolIds.length > 0) {
 				if (!agent.subjectId) {
-					const selectedTools = await tx.select().from(tools).where(inArray(tools.id, toolIds));
+					const selectedTools = tx.select().from(tools).where(inArray(tools.id, toolIds)).all();
 					const requiresSubject = selectedTools.some((t) => t.isSubjectRequired);
 					if (requiresSubject) {
 						error(400, 'Cannot assign a subject-required tool to an agent with no subject');
 					}
 				}
 
-				await tx
-					.insert(agentTools)
-					.values(toolIds.map((toolId) => ({ agentId: agent.id, toolId })));
+				tx.insert(agentTools)
+					.values(toolIds.map((toolId) => ({ agentId: agent.id, toolId })))
+					.run();
 			}
 
 			if (subagentIds.length > 0) {
-				const ancestors = await computeAncestorIds(agent.id);
+				const edges = tx.select().from(agentSubagents).all();
+				const ancestors = ancestorsFromEdges(edges, agent.id);
 				const invalid = subagentIds.filter((sid) => sid === agent.id || ancestors.has(sid));
 				if (invalid.length > 0) {
 					error(400, 'Cannot assign a subagent that would create a cycle');
 				}
 
-				const candidateSubagents = await tx
+				const candidateSubagents = tx
 					.select()
 					.from(agents)
-					.where(inArray(agents.id, subagentIds));
+					.where(inArray(agents.id, subagentIds))
+					.all();
 				const subjectMismatch = candidateSubagents.some(
 					(sa) =>
 						sa.subjectId !== null && agent.subjectId !== null && sa.subjectId !== agent.subjectId
@@ -257,9 +274,9 @@ export const saveAgent = form(
 					error(400, 'Cannot assign a subagent whose subject does not match');
 				}
 
-				await tx
-					.insert(agentSubagents)
-					.values(subagentIds.map((subagentId) => ({ agentId: agent.id, subagentId })));
+				tx.insert(agentSubagents)
+					.values(subagentIds.map((subagentId) => ({ agentId: agent.id, subagentId })))
+					.run();
 			}
 
 			return agent;

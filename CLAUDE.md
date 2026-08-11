@@ -2,18 +2,74 @@
 
 Personal AI language study-assistant app. A SvelteKit web UI on top of a tool-calling
 agent loop backed by Ollama (local LLM) and Anki (flashcards), with
-Postgres for persistence (sessions, messages, memories, study-topic
-progress, mistake logs).
+SQLite for persistence (sessions, messages, memories, study-topic
+progress, mistake logs) — chosen specifically because the app is headed
+toward an eventual Electron packaging, where a single embedded db file beats
+running a separate server process (see "Database" section below).
 
 ## Stack
 
 - SvelteKit 3 (prerelease — see "SvelteKit 3" section below), Svelte 5 (runes mode,
   remote functions enabled), TypeScript, Tailwind 4
-- Postgres via `drizzle-orm`/`postgres-js`, schema in [src/lib/server/db/schema.ts](src/lib/server/db/schema.ts)
+- SQLite via `drizzle-orm`/`better-sqlite3`, schema in [src/lib/server/db/schema.ts](src/lib/server/db/schema.ts)
 - Ollama as the model provider (local, `http://localhost:11434`)
 - Anki access via AnkiConnect (tools under `src/lib/server/tools/anki/`)
 - `pino` for logging
 - Package manager: **pnpm** (not npm/yarn — see `pnpm-workspace.yaml`, `.npmrc engine-strict=true`)
+
+## Database
+
+Migrated from Postgres to SQLite (`better-sqlite3`) — driven by the Electron
+plan, not a preference swap: there's no way to bundle a real Postgres server
+inside a desktop app, and a single embedded db file is exactly the shape
+Electron wants (`app.getPath('userData')`, easy backup/export, nothing to
+run/manage separately). No production data existed yet at migration time, so
+there was no export/import step — just a schema rewrite.
+
+- **Driver: `better-sqlite3`, not `node:sqlite` or `libSQL`.** Benchmarked
+  faster than `node:sqlite` on local file ops (both are sync APIs, which
+  suits SvelteKit's server-side request/response model); `libSQL`'s
+  async/remote-first design costs 10–20x on local file ops, a bad trade for a
+  purely local db. The deciding factor over `node:sqlite` specifically:
+  **drizzle-kit does not support `node:sqlite` as a migration driver at
+  all** ([drizzle-team/drizzle-orm#5471](https://github.com/drizzle-team/drizzle-orm/issues/5471))
+  — you'd need `better-sqlite3` installed anyway just for `drizzle-kit
+  push`/`generate`/`migrate`, which defeats the "zero native deps" appeal
+  that's the whole reason to reach for `node:sqlite`. Being a native module,
+  `better-sqlite3` needs `@electron/rebuild` in the eventual Electron
+  packaging pipeline — a real step, but the most well-documented native
+  module in that ecosystem, not exploratory risk.
+- **Id/timestamp/json column conventions**, all in
+  [schema.ts](src/lib/server/db/schema.ts): SQLite has no native
+  uuid/boolean/timestamp types, so `id()`/`createdAt()`/`updatedAt()` are
+  small local helper functions (not exported — just factored out of the
+  per-table repetition) wrapping `text().$defaultFn(() =>
+  crypto.randomUUID())` and `integer({ mode: 'timestamp_ms' })`. Timestamps
+  are **app-generated (`$defaultFn(() => new Date())`), not DB-generated**
+  (no `default(sql\`(unixepoch())\`)`) — deliberately millisecond precision,
+  because `messages.createdAt` is the sole ordering key for a session's
+  transcript ([contextManager.ts](src/lib/server/contextManager.ts),
+  [sessions.remote.ts](src/lib/sessions.remote.ts) both `orderBy:
+  asc(createdAt)` with no secondary sort key) and a user message immediately
+  followed by an assistant reply can easily land in the same second.
+  `updatedAt` has no `$onUpdate` — matching the original Postgres schema, it
+  only reflects insert time unless a tool explicitly sets it (see
+  `saveMemoryTool.ts`/`updateTopicTool.ts`), so adding automatic bump-on-update
+  behavior here would have been a silent semantics change, not a faithful
+  port. `messageToolCalls.args` (Postgres `jsonb`) is `text({ mode: 'json'
+  })` — SQLite has had real JSON query support (`json_extract`, `->`/`->>`)
+  since 3.38 (2022) and a binary JSONB storage optimization since 3.45
+  (2024), so this is not a capability loss for the debug-querying use case
+  that originally motivated `jsonb`, just a different storage encoding.
+- **Dev reset**: [clean.ts](src/lib/server/db/clean.ts) deletes the sqlite
+  file (plus `-wal`/`-shm` sidecars, since `journal_mode = WAL` is set in
+  [db/index.ts](src/lib/server/db/index.ts)) rather than dropping/recreating
+  a schema — the SQLite equivalent of the old `DROP SCHEMA public CASCADE`
+  full-reset approach.
+- Dropped entirely: `compose.dev.yaml`/`compose.prod.yaml` and the
+  `POSTGRES_*` env vars — no server process to containerize anymore.
+  `DATABASE_URL` is now a plain filesystem path (`.data/dev.sqlite3` /
+  `.data/prod.sqlite3`, both gitignored).
 
 ## How the agent works
 
@@ -22,7 +78,7 @@ progress, mistake logs).
   turns via `ContextManager`. Max 20 iterations per `run(prompt, onChunk, signal)`.
 - [src/lib/server/contextManager.ts](src/lib/server/contextManager.ts) —
   builds the message list sent to the model and persists messages/tool calls
-  to Postgres (`messages`, `message_tool_calls` tables).
+  to SQLite (`messages`, `message_tool_calls` tables).
 - [src/lib/server/modelProviders/](src/lib/server/modelProviders/) —
   `ModelProvider` interface; `OllamaProvider` is the current implementation.
 - **Cancellation** is `AbortSignal`-based, threaded top-down as a plain
@@ -65,7 +121,7 @@ progress, mistake logs).
   before an `await` elsewhere in the same `finally` left a window where
   Cancel was clickable but silently did nothing). Not all tools are
   meaningfully cancellable: `save_memory`/`delete_memory`/`create_topic`/
-  `update_topic`/`create_mistake`/`update_mistake` do a single fast Postgres
+  `update_topic`/`create_mistake`/`update_mistake` do a single fast SQLite
   write and ignore the signal entirely — `drizzle-orm` has no query
   cancellation support (an `AbortSignal`-param feature request has been open
   since Dec 2023 with no movement,
@@ -444,7 +500,7 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
 
 - `pnpm dev` / `pnpm dev-debug` / `pnpm dev-trace` — runs [scripts/dev.ts](scripts/dev.ts).
   If `DB_WIPE_ON_START=true` (set in `.env.development`, default on) it first
-  drops and recreates the `public` schema, then always does
+  deletes the sqlite db file, then always does
   `drizzle-kit push --force` (schema sync straight from
   [schema.ts](src/lib/server/db/schema.ts), no migration files) + seeds the
   dev DB, then runs `vite dev`. Stopping it does nothing to the DB — the wipe
@@ -453,13 +509,9 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
   see `db:prod:*` below for the real migration flow.
   The `-debug`/`-trace` variants set `LOG_LEVEL` for `pino` (default level is
   `info`, see [src/lib/server/logger.ts](src/lib/server/logger.ts)).
-  Requires the dev DB container to already be running (`pnpm db:dev:start`,
-  started manually in another terminal — docker lifecycle is never automatic).
+  No server process to start beforehand — the db is a local sqlite file.
 - `pnpm build` then `pnpm start` — production build/run. `start` loads
   `.env.production` via Node's `--env-file` and does **not** seed or clean.
-- `pnpm db:dev:start` / `pnpm db:prod:start` — `docker compose up` against
-  [compose.dev.yaml](compose.dev.yaml) / [compose.prod.yaml](compose.prod.yaml)
-  (separate ports/volumes/db names, see `.env.development` / `.env.production`).
 - `pnpm db:dev:push` / `db:dev:studio` / `db:dev:seed` / `db:dev:clean` — dev
   DB tools; `push` is also what `scripts/dev.ts` calls automatically.
 - `pnpm db:prod:generate` / `db:prod:migrate` / `db:prod:studio` — real
@@ -474,10 +526,9 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
 - Per-mode env files following Vite's `.env.[mode]` convention:
   `.env.development` / `.env.production` (gitignored, real values) with
   `.env.development.example` / `.env.production.example` as committed
-  templates. Each carries `DATABASE_URL` plus the `POSTGRES_*` vars used to
-  parameterize the matching compose file, so app and docker credentials stay
-  in one place. Dev is Postgres on `:5432`/db `shinrin`; prod is `:5433`/db
-  `shinrin_prod` so both can run side by side.
+  templates. Each carries just `DATABASE_URL` — a filesystem path to a local
+  sqlite file (`.data/dev.sqlite3` / `.data/prod.sqlite3`, both gitignored),
+  so both can exist on the same machine side by side.
 - [src/lib/server/env.ts](src/lib/server/env.ts) — `loadEnv(mode)` loads the
   right `.env.[mode]` file for anything that runs outside Vite (drizzle
   configs, seed, clean, `scripts/dev.ts`). SvelteKit's own dev/build/preview

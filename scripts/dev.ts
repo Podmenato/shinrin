@@ -1,9 +1,8 @@
 // Wraps `vite dev` so the dev DB is always in a known state before the app
 // starts: optionally wipe, then schema-push, then seed. Nothing runs when
 // the dev server stops — the wipe (if enabled) happens on the *next* start,
-// not on Ctrl+C. Requires the dev DB container to already be running
-// (`pnpm db:dev:start`, started manually — docker lifecycle is never
-// automatic here).
+// not on Ctrl+C. The dev db is a local sqlite file (see DATABASE_URL in
+// .env.development) — no server process to start beforehand.
 import { spawn, spawnSync } from 'node:child_process';
 import { loadEnv } from '$lib/server/env';
 
@@ -12,9 +11,7 @@ loadEnv('development');
 function run(command: string, args: string[]): void {
 	const result = spawnSync(command, args, { stdio: 'inherit', env: process.env });
 	if (result.status !== 0) {
-		console.error(
-			`\n"${[command, ...args].join(' ')}" failed. Is the dev database running? Try: pnpm db:dev:start\n`
-		);
+		console.error(`\n"${[command, ...args].join(' ')}" failed.\n`);
 		process.exit(result.status ?? 1);
 	}
 }

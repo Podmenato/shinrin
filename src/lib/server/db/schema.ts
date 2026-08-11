@@ -1,150 +1,160 @@
 import { relations } from 'drizzle-orm';
 import {
-	type AnyPgColumn,
-	boolean,
-	jsonb,
-	pgTable,
+	type AnySQLiteColumn,
+	integer,
 	primaryKey,
+	sqliteTable,
 	text,
-	timestamp,
-	unique,
-	uuid
-} from 'drizzle-orm/pg-core';
+	unique
+} from 'drizzle-orm/sqlite-core';
 
-export const subjects = pgTable('subjects', {
-	id: uuid().primaryKey().defaultRandom(),
+const generateUUID = () =>
+	text()
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID());
+const createdAt = () =>
+	integer({ mode: 'timestamp_ms' })
+		.notNull()
+		.$defaultFn(() => new Date());
+const updatedAt = () =>
+	integer('updated_at', { mode: 'timestamp_ms' })
+		.notNull()
+		.$defaultFn(() => new Date());
+
+export const subjects = sqliteTable('subjects', {
+	id: generateUUID(),
 	name: text().notNull().unique(),
 	description: text(),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-	updatedAt: timestamp('updated_at').defaultNow().notNull()
+	createdAt: createdAt(),
+	updatedAt: updatedAt()
 });
 
-export const agents = pgTable('agents', {
-	id: uuid().primaryKey().defaultRandom(),
+export const agents = sqliteTable('agents', {
+	id: generateUUID(),
 	name: text().notNull().unique(),
 	systemPrompt: text('system_prompt'),
-	isSubagent: boolean('is_subagent').notNull().default(false),
+	isSubagent: integer('is_subagent', { mode: 'boolean' }).notNull().default(false),
 	subagentDescription: text('subagent_description'),
 	defaultModel: text('default_model'),
-	subjectId: uuid('subject_id').references(() => subjects.id),
-	deletedAt: timestamp('deleted_at'),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-	updatedAt: timestamp('updated_at').defaultNow().notNull()
+	subjectId: text('subject_id').references(() => subjects.id),
+	deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
+	createdAt: createdAt(),
+	updatedAt: updatedAt()
 });
 
-export const tools = pgTable('tools', {
-	id: uuid().primaryKey().defaultRandom(),
+export const tools = sqliteTable('tools', {
+	id: generateUUID(),
 	name: text().notNull().unique(),
-	isSubjectRequired: boolean('is_subject_required').notNull().default(false),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-	updatedAt: timestamp('updated_at').defaultNow().notNull()
+	isSubjectRequired: integer('is_subject_required', { mode: 'boolean' }).notNull().default(false),
+	createdAt: createdAt(),
+	updatedAt: updatedAt()
 });
 
-export const agentTools = pgTable(
+export const agentTools = sqliteTable(
 	'agent_tools',
 	{
-		agentId: uuid('agent_id')
+		agentId: text('agent_id')
 			.notNull()
 			.references(() => agents.id),
-		toolId: uuid('tool_id')
+		toolId: text('tool_id')
 			.notNull()
 			.references(() => tools.id)
 	},
 	(t) => [primaryKey({ columns: [t.agentId, t.toolId] })]
 );
 
-export const agentSubagents = pgTable(
+export const agentSubagents = sqliteTable(
 	'agent_subagents',
 	{
-		agentId: uuid('agent_id')
+		agentId: text('agent_id')
 			.notNull()
 			.references(() => agents.id),
-		subagentId: uuid('subagent_id')
+		subagentId: text('subagent_id')
 			.notNull()
 			.references(() => agents.id)
 	},
 	(t) => [primaryKey({ columns: [t.agentId, t.subagentId] })]
 );
 
-export const sessions = pgTable('sessions', {
-	id: uuid().primaryKey().defaultRandom(),
-	agentId: uuid('agent_id')
+export const sessions = sqliteTable('sessions', {
+	id: generateUUID(),
+	agentId: text('agent_id')
 		.notNull()
 		.references(() => agents.id),
 	name: text().notNull(),
 	model: text().notNull(),
 	systemPrompt: text('system_prompt'),
 	summary: text('summary'),
-	parentSessionId: uuid('parent_session_id').references((): AnyPgColumn => sessions.id),
-	summarizedThroughMessageId: uuid('summarized_through_message_id').references(
-		(): AnyPgColumn => messages.id
+	parentSessionId: text('parent_session_id').references((): AnySQLiteColumn => sessions.id),
+	summarizedThroughMessageId: text('summarized_through_message_id').references(
+		(): AnySQLiteColumn => messages.id
 	),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-	updatedAt: timestamp('updated_at').defaultNow().notNull()
+	createdAt: createdAt(),
+	updatedAt: updatedAt()
 });
 
-export const messages = pgTable('messages', {
-	id: uuid().primaryKey().defaultRandom(),
-	sessionId: uuid('session_id')
+export const messages = sqliteTable('messages', {
+	id: generateUUID(),
+	sessionId: text('session_id')
 		.notNull()
 		.references(() => sessions.id),
 	role: text('role').notNull(),
 	content: text('content').notNull(),
 	toolName: text('tool_name'),
-	createdAt: timestamp('created_at').defaultNow().notNull()
+	createdAt: createdAt()
 });
 
-export const messageToolCalls = pgTable('message_tool_calls', {
-	id: uuid().primaryKey().defaultRandom(),
-	messageId: uuid('message_id')
+export const messageToolCalls = sqliteTable('message_tool_calls', {
+	id: generateUUID(),
+	messageId: text('message_id')
 		.notNull()
 		.references(() => messages.id),
-	toolId: uuid('tool_id')
+	toolId: text('tool_id')
 		.notNull()
 		.references(() => tools.id),
-	args: jsonb('args')
+	args: text('args', { mode: 'json' })
 });
 
-export const memories = pgTable(
+export const memories = sqliteTable(
 	'memories',
 	{
-		id: uuid().primaryKey().defaultRandom(),
-		agentId: uuid('agent_id')
+		id: generateUUID(),
+		agentId: text('agent_id')
 			.notNull()
 			.references(() => agents.id),
 		key: text('key').notNull(),
 		value: text('value').notNull(),
-		deletedAt: timestamp('deleted_at'),
-		createdAt: timestamp('created_at').defaultNow().notNull(),
-		updatedAt: timestamp('updated_at').defaultNow().notNull()
+		deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
 	},
 	(t) => [unique().on(t.agentId, t.key)]
 );
 
-export const studyTopics = pgTable(
+export const studyTopics = sqliteTable(
 	'study_topics',
 	{
-		id: uuid().primaryKey().defaultRandom(),
-		subjectId: uuid('subject_id')
+		id: generateUUID(),
+		subjectId: text('subject_id')
 			.notNull()
 			.references(() => subjects.id),
 		topic: text('topic').notNull(),
 		status: text('status').notNull(),
 		notes: text('notes'),
-		createdAt: timestamp('created_at').defaultNow().notNull(),
-		updatedAt: timestamp('updated_at').defaultNow().notNull()
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
 	},
 	(t) => [unique().on(t.subjectId, t.topic)]
 );
 
-export const mistakeObservations = pgTable('mistake_observations', {
-	id: uuid().primaryKey().defaultRandom(),
-	subjectId: uuid('subject_id')
+export const mistakeObservations = sqliteTable('mistake_observations', {
+	id: generateUUID(),
+	subjectId: text('subject_id')
 		.notNull()
 		.references(() => subjects.id),
 	title: text('title').notNull(),
 	note: text('note').notNull(),
-	createdAt: timestamp('created_at').defaultNow().notNull()
+	createdAt: createdAt()
 });
 
 export const subjectsRelations = relations(subjects, ({ many }) => ({

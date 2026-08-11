@@ -1,5 +1,7 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema';
 import {
 	agentSubagents,
@@ -19,7 +21,8 @@ import { currentMode, loadEnv } from '../env';
 // reading DATABASE_URL below.
 loadEnv(currentMode());
 
-const client = postgres(process.env.DATABASE_URL!);
+mkdirSync(dirname(process.env.DATABASE_URL!), { recursive: true });
+const client = new Database(process.env.DATABASE_URL!);
 const db = drizzle(client, { schema });
 
 const MEMORY_RULES =
@@ -368,4 +371,4 @@ for (const [agentName, sessionSeeds] of Object.entries(SESSION_SEEDS)) {
 console.log(
 	'Seeded agents, tools, subjects, agent_tools, agent_subagents, mistake_observations, study_topics, sessions and messages.'
 );
-await client.end();
+client.close();

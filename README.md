@@ -2,7 +2,7 @@
 
 Shinrin (森林, "forest") is a personal language-study assistant: a SvelteKit
 UI on top of a tool-calling agent loop, running against a local LLM via
-Ollama, with Anki as its flashcard backend and Postgres for persistence
+Ollama, with Anki as its flashcard backend and SQLite for persistence
 (sessions, messages, memories, per-language study progress, mistake logs).
 
 It's a from-scratch alternative to generic chatbot-based studying — instead
@@ -50,27 +50,22 @@ cp .env.development.example .env.development
 cp .env.production.example .env.production   # only needed once you actually deploy
 ```
 
-The `.env.*` files hold both the app's `DATABASE_URL` and the `POSTGRES_*`
-vars used to configure the matching docker-compose file, so app and DB
-credentials stay in one place per environment. Dev defaults to Postgres on
-`:5432`/db `shinrin`; prod to `:5433`/db `shinrin_prod`, so both can run on
-the same machine if needed.
+The `.env.*` files hold the app's `DATABASE_URL` — a plain filesystem path to
+a local sqlite file, one per environment. Dev defaults to
+`.data/dev.sqlite3`; prod to `.data/prod.sqlite3` (gitignored), so both can
+exist on the same machine if needed. There's no separate DB server or
+container to run.
 
 ## Developing
 
-Docker lifecycle is always manual — start the dev DB yourself in one
-terminal, then run the app in another:
-
 ```sh
-pnpm db:dev:start   # docker compose up, compose.dev.yaml
-pnpm dev             # or dev-debug / dev-trace for LOG_LEVEL=debug/trace
+pnpm dev   # or dev-debug / dev-trace for LOG_LEVEL=debug/trace
 ```
 
 `pnpm dev` runs [scripts/dev.ts](scripts/dev.ts), which:
 
-1. If `DB_WIPE_ON_START=true` in `.env.development` (the default), drops and
-   recreates the `public` schema — every dev session starts from a known,
-   empty state.
+1. If `DB_WIPE_ON_START=true` in `.env.development` (the default), deletes
+   the sqlite db file — every dev session starts from a known, empty state.
 2. Runs `drizzle-kit push --force` against [schema.ts](src/lib/server/db/schema.ts)
    to (re)create the tables. There are **no migration files in dev** — they
    were pure friction when the underlying data got wiped on every session
@@ -87,17 +82,15 @@ Other dev DB commands: `pnpm db:dev:push`, `db:dev:studio`, `db:dev:seed`,
 
 ## Production
 
-Production is a separate, real Postgres you actually want to keep — no push,
-no seed, no auto-wipe. Schema changes go through reviewed migration files
+Production is a separate sqlite file you actually want to keep — no push, no
+seed, no auto-wipe. Schema changes go through reviewed migration files
 instead of a direct schema sync:
 
 ```sh
-pnpm db:prod:start                      # docker compose up, compose.prod.yaml
 pnpm db:prod:generate                   # generate a migration from schema.ts changes
 pnpm db:prod:migrate                    # apply migrations
 pnpm build && pnpm start                # build and run the app itself
 ```
 
 `pnpm start` runs `node --env-file=.env.production build`, i.e. plain
-adapter-node output — there's no app Dockerfile, only the two Postgres
-compose files.
+adapter-node output — there's no app Dockerfile or DB container involved.
