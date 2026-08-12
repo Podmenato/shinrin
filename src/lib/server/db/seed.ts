@@ -138,6 +138,7 @@ await db
 	.insert(tools)
 	.values([
 		{ name: 'current_time_tool' },
+		{ name: 'fetch_url' },
 		{ name: 'get_decks' },
 		{ name: 'add_note' },
 		{ name: 'add_sentence_note' },

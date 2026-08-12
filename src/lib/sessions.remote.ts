@@ -74,7 +74,7 @@ export const runAgent = command(runSchema, async ({ sessionId, prompt }) => {
 
 	// TODO: make provider independent
 	const provider = new OllamaProvider(session.model);
-	const agent = await Agent.createFromSession(sessionId, provider);
+	const agent = await Agent.createFromSession(sessionId, provider, prompt);
 	const controller = new AbortController();
 
 	sessionRegistry.start(sessionId, controller);

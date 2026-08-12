@@ -4,6 +4,7 @@ export type ToolParameter = {
 	required: boolean;
 	description?: string;
 	items?: { type: string };
+	enum?: string[];
 };
 
 export type ToolDefinition = {

@@ -36,7 +36,8 @@ function toOllamaTool(tool: Tool): OllamaTool {
 						{
 							type: param.type,
 							...(param.description ? { description: param.description } : {}),
-							...(param.items ? { items: param.items } : {})
+							...(param.items ? { items: param.items } : {}),
+								...(param.enum ? { enum: param.enum } : {})
 						}
 					])
 				),

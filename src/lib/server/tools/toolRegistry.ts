@@ -4,6 +4,7 @@ import { agentSubagents } from '../db/schema';
 import type { Tool } from './tool';
 import { SubagentTool } from './subagentTool';
 import { CurrentTimeTool } from './currentTimeTool';
+import { FetchUrlTool } from './fetchUrlTool';
 import { GetDecksTool } from './anki/getDecksTool';
 import { AddNoteTool } from './anki/addNoteTool';
 import { AddSentenceNoteTool } from './anki/addSentenceNoteTool';
@@ -19,7 +20,7 @@ import { UpdateTopicTool } from './updateTopicTool';
 import { CreateMistakeTool } from './createMistakeTool';
 import { UpdateMistakeTool } from './updateMistakeTool';
 
-export type ToolContext = { agentId: string; subjectId: string | null };
+export type ToolContext = { agentId: string; subjectId: string | null; urls: string[] };
 
 const registry: Record<string, () => Tool> = {
 	current_time_tool: () => new CurrentTimeTool(),
@@ -35,24 +36,27 @@ const registry: Record<string, () => Tool> = {
 	update_mistake: () => new UpdateMistakeTool()
 };
 
-const contextualRegistry: Record<string, (ctx: ToolContext) => Tool> = {
+const contextualRegistry: Record<string, (ctx: ToolContext) => Tool | null> = {
 	save_memory: (ctx) => new SaveMemoryTool(ctx.agentId),
 	delete_memory: (ctx) => new DeleteMemoryTool(ctx.agentId),
 	create_topic: (ctx) => new CreateTopicTool(ctx.subjectId),
-	create_mistake: (ctx) => new CreateMistakeTool(ctx.subjectId)
+	create_mistake: (ctx) => new CreateMistakeTool(ctx.subjectId),
+	fetch_url: (ctx) => (ctx.urls.length > 0 ? new FetchUrlTool(ctx.urls) : null)
 };
 
 export function getTools(names: string[], ctx: ToolContext): Tool[] {
-	return names.map((name) => {
-		if (name in contextualRegistry) {
-			return contextualRegistry[name](ctx);
-		}
-		const factory = registry[name];
-		if (!factory) {
-			throw new Error(`Unknown tool: ${name}`);
-		}
-		return factory();
-	});
+	return names
+		.map((name) => {
+			if (name in contextualRegistry) {
+				return contextualRegistry[name](ctx);
+			}
+			const factory = registry[name];
+			if (!factory) {
+				throw new Error(`Unknown tool: ${name}`);
+			}
+			return factory();
+		})
+		.filter((tool) => tool !== null);
 }
 
 function subagentToolName(agentName: string): string {
