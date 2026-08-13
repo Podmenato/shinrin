@@ -13,6 +13,15 @@ const USER_AGENT =
 	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
 const turndownService = new TurndownService();
+// Dropping link and img tags to not tax context without unnecessary tokens
+turndownService.addRule('stripLinkHrefs', {
+	filter: 'a',
+	replacement: (content) => content
+});
+turndownService.addRule('stripImages', {
+	filter: 'img',
+	replacement: () => ''
+});
 
 const URL_PATTERN = /https?:\/\/[^\s<>"')\]]+/g;
 
