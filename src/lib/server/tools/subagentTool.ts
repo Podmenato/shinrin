@@ -2,6 +2,7 @@ import type { Tool, ToolDefinition } from './tool';
 import { ToolError } from './tool';
 import { Agent } from '../agent';
 import { OllamaProvider } from '../modelProviders/ollamaProvider';
+import { toJsonObjectSchema, type JsonValue } from '$lib/json';
 
 /** Wraps another agent as a tool: calling it runs a full nested agent loop and returns its final reply. */
 export class SubagentTool implements Tool {
@@ -17,18 +18,13 @@ export class SubagentTool implements Tool {
 		this.definition = {
 			name,
 			description,
-			parameters: [
-				{
-					name: 'input',
-					type: 'string',
-					required: true,
-					description: 'The request to hand off to this subagent.'
-				}
-			]
+			parameters: toJsonObjectSchema({
+				input: { type: 'string', description: 'The request to hand off to this subagent.' }
+			})
 		};
 	}
 
-	async execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string> {
+	async execute(args: Record<string, JsonValue>, signal: AbortSignal): Promise<string> {
 		const input = args.input;
 		if (typeof input !== 'string') {
 			throw new ToolError('input must be a string');

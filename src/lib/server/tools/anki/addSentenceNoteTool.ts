@@ -2,6 +2,7 @@ import type { Tool, ToolDefinition } from '../tool';
 import { ToolError } from '../tool';
 import { ankiRequest } from './ankiClient';
 import { GetDecksTool } from './getDecksTool';
+import { toJsonObjectSchema, type JsonValue } from '$lib/json';
 
 const MODEL_NAME = 'Agent sentence';
 
@@ -14,49 +15,34 @@ export class AddSentenceNoteTool implements Tool {
 			'\n' +
 			'Pass decks in card template order: [Reading deck, Production deck, Listening deck].\n' +
 			'Example: ["Mandarin sentences (Reading)", "Mandarin sentences (Production)", "Mandarin sentences (Listening)"]',
-		parameters: [
-			{
-				name: 'decks',
+		parameters: toJsonObjectSchema({
+			decks: {
 				type: 'array',
 				items: { type: 'string' },
-				description: 'Deck names in card order: [Reading, Production, Listening].',
-				required: true
+				description: 'Deck names in card order: [Reading, Production, Listening].'
 			},
-			{
-				name: 'sentence',
-				type: 'string',
-				description: 'The sentence in the target language.',
-				required: true
-			},
-			{
-				name: 'translation',
-				type: 'string',
-				description: 'English translation of the sentence.',
-				required: true
-			},
-			{
-				name: 'reading',
+			sentence: { type: 'string', description: 'The sentence in the target language.' },
+			translation: { type: 'string', description: 'English translation of the sentence.' },
+			reading: {
 				type: 'string',
 				description: 'Furigana or pinyin reading of the sentence. Optional but recommended.',
-				required: false
+				optional: true
 			},
-			{
-				name: 'notes',
+			notes: {
 				type: 'string',
 				description: 'Extra context, nuance, or grammar explanation. Optional.',
-				required: false
+				optional: true
 			},
-			{
-				name: 'tags',
+			tags: {
 				type: 'array',
 				items: { type: 'string' },
 				description: 'Additional tags. "shinrin" is always added automatically.',
-				required: false
+				optional: true
 			}
-		]
+		})
 	};
 
-	async execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string> {
+	async execute(args: Record<string, JsonValue>, signal: AbortSignal): Promise<string> {
 		const { decks, sentence, translation, reading, notes, tags } = await this.validateArgs(
 			args,
 			signal
@@ -104,7 +90,7 @@ export class AddSentenceNoteTool implements Tool {
 		});
 	}
 
-	async validateArgs(args: Record<string, unknown>, signal: AbortSignal) {
+	async validateArgs(args: Record<string, JsonValue>, signal: AbortSignal) {
 		const deckList = JSON.parse(await new GetDecksTool().execute({}, signal)) as string[];
 
 		if (!Array.isArray(args.decks) || args.decks.length !== 3) {

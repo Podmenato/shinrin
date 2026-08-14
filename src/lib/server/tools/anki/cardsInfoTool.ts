@@ -1,6 +1,7 @@
 import type { Tool, ToolDefinition } from '../tool';
 import { ankiRequest } from './ankiClient';
 import type { KanjiFields, VocabFields } from './noteTypes';
+import { toJsonObjectSchema, type JsonValue } from '$lib/json';
 
 const KANJI_MODEL = 'Japanese Kanji';
 const JAPANESE_VOCAB_MODEL = 'Japanese vocab';
@@ -45,18 +46,16 @@ export class CardsInfoTool implements Tool {
 		name: 'cards_info',
 		description:
 			'Returns scheduling data (ease factor, interval, lapses, reps, due) and content for a list of card IDs. Use after find_cards to analyze card performance.',
-		parameters: [
-			{
-				name: 'cardIds',
+		parameters: toJsonObjectSchema({
+			cardIds: {
 				type: 'array',
 				items: { type: 'integer' },
-				description: 'Array of card IDs to fetch',
-				required: true
+				description: 'Array of card IDs to fetch'
 			}
-		]
+		})
 	};
 
-	async execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string> {
+	async execute(args: Record<string, JsonValue>, signal: AbortSignal): Promise<string> {
 		const cards = await ankiRequest<CardInfo[]>('cardsInfo', { cards: args.cardIds }, signal);
 
 		const cleanedCards = cards.map((card) => {

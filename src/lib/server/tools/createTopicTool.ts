@@ -2,6 +2,7 @@ import type { Tool, ToolDefinition } from './tool';
 import { ToolError } from './tool';
 import { db } from '../db/index';
 import { studyTopics } from '../db/schema';
+import { toJsonObjectSchema, type JsonValue } from '$lib/json';
 
 const VALID_STATUSES = ['introduced', 'practicing', 'mastered'] as const;
 
@@ -16,30 +17,22 @@ export class CreateTopicTool implements Tool {
 			description:
 				'Start tracking a new topic (a grammar point, vocab set, etc.) for the user. ' +
 				'Check the topics already listed in your context first — if one already covers this, use update_topic instead of creating a near-duplicate.',
-			parameters: [
-				{
-					name: 'topic',
+			parameters: toJsonObjectSchema({
+				topic: {
 					type: 'string',
-					required: true,
 					description: "Short name of the topic (e.g. 'べき grammar', 'family vocab')."
 				},
-				{
-					name: 'status',
+				status: { type: 'string', description: `One of: ${VALID_STATUSES.join(', ')}.` },
+				notes: {
 					type: 'string',
-					required: true,
-					description: `One of: ${VALID_STATUSES.join(', ')}.`
-				},
-				{
-					name: 'notes',
-					type: 'string',
-					required: false,
-					description: 'Optional detail — what was covered, what to focus on next, etc.'
+					description: 'Optional detail — what was covered, what to focus on next, etc.',
+					optional: true
 				}
-			]
+			})
 		};
 	}
 
-	async execute(args: Record<string, unknown>): Promise<string> {
+	async execute(args: Record<string, JsonValue>): Promise<string> {
 		const topic = args.topic as string;
 		const status = args.status as string;
 		const notes = (args.notes as string | undefined) ?? null;

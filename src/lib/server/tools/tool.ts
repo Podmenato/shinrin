@@ -1,16 +1,9 @@
-export type ToolParameter = {
-	name: string;
-	type: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object';
-	required: boolean;
-	description?: string;
-	items?: { type: string };
-	enum?: string[];
-};
+import type { JsonValue, JsonObjectSchema } from '$lib/json';
 
 export type ToolDefinition = {
 	name: string;
 	description: string;
-	parameters: ToolParameter[];
+	parameters: JsonObjectSchema;
 };
 
 export class ToolError extends Error {
@@ -22,5 +15,5 @@ export class ToolError extends Error {
 
 export interface Tool {
 	definition: ToolDefinition;
-	execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string>;
+	execute(args: Record<string, JsonValue>, signal: AbortSignal): Promise<string>;
 }

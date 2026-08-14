@@ -3,6 +3,7 @@ import { ToolError } from './tool';
 import { db } from '../db/index';
 import { memories } from '../db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
+import { toJsonObjectSchema, type JsonValue } from '$lib/json';
 
 export class DeleteMemoryTool implements Tool {
 	definition: ToolDefinition;
@@ -14,18 +15,13 @@ export class DeleteMemoryTool implements Tool {
 			name: 'delete_memory',
 			description:
 				'Remove a previously saved memory by key. Use this to retire a memory that is no longer relevant or accurate, rather than leaving stale information in place.',
-			parameters: [
-				{
-					name: 'key',
-					type: 'string',
-					required: true,
-					description: 'The key of the memory to delete.'
-				}
-			]
+			parameters: toJsonObjectSchema({
+				key: { type: 'string', description: 'The key of the memory to delete.' }
+			})
 		};
 	}
 
-	async execute(args: Record<string, unknown>): Promise<string> {
+	async execute(args: Record<string, JsonValue>): Promise<string> {
 		const key = args.key as string;
 
 		const [deleted] = await db

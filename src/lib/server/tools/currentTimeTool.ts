@@ -1,4 +1,5 @@
 import type { Tool, ToolDefinition } from './tool';
+import { toJsonObjectSchema } from '$lib/json';
 
 export class CurrentTimeTool implements Tool {
 	definition: ToolDefinition;
@@ -7,7 +8,7 @@ export class CurrentTimeTool implements Tool {
 		this.definition = {
 			name: 'current_time_tool',
 			description: 'Returns the current time in the ISO format',
-			parameters: []
+			parameters: toJsonObjectSchema({})
 		};
 	}
 

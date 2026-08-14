@@ -3,6 +3,7 @@ import { ToolError } from '../tool';
 import { ankiRequest } from './ankiClient';
 import { GetDecksTool } from './getDecksTool';
 import { GetModelsTool } from './getModelsTool';
+import { toJsonObjectSchema, type JsonValue } from '$lib/json';
 
 export class AddNoteTool implements Tool {
 	definition: ToolDefinition = {
@@ -16,33 +17,25 @@ export class AddNoteTool implements Tool {
 			'    Japanese: <ruby>猫<rt>ねこ</rt></ruby>が<ruby>好<rt>す</rt></ruby>きです。\n' +
 			'    Wrap each word or character in <ruby>...<rt>reading</rt></ruby>. Leave punctuation as plain text.\n' +
 			'  SentenceMeaning — front of the production card. The English translation of the sentence.',
-		parameters: [
-			{ name: 'deckName', type: 'string', description: 'Target deck name', required: true },
-			{
-				name: 'modelName',
-				type: 'string',
-				description: 'Note type (model) name',
-				required: true
-			},
-			{
-				name: 'fields',
+		parameters: toJsonObjectSchema({
+			deckName: { type: 'string', description: 'Target deck name' },
+			modelName: { type: 'string', description: 'Note type (model) name' },
+			fields: {
 				type: 'object',
 				description:
-					'Field name to value pairs matching the note type. All values must be plain strings.',
-				required: true
+					'Field name to value pairs matching the note type. All values must be plain strings.'
 			},
-			{
-				name: 'tags',
+			tags: {
 				type: 'array',
 				items: { type: 'string' },
 				description:
 					'Additional tags to apply to the note. The "shinrin" tag is always added automatically.',
-				required: false
+				optional: true
 			}
-		]
+		})
 	};
 
-	async execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string> {
+	async execute(args: Record<string, JsonValue>, signal: AbortSignal): Promise<string> {
 		await this.validateArgs(args, signal);
 
 		const tags = ['shinrin', ...((args.tags as string[] | undefined) ?? [])];
@@ -64,7 +57,7 @@ export class AddNoteTool implements Tool {
 		return JSON.stringify({ noteId });
 	}
 
-	async validateArgs(args: Record<string, unknown>, signal: AbortSignal) {
+	async validateArgs(args: Record<string, JsonValue>, signal: AbortSignal) {
 		const [decks, modelsRaw] = await Promise.all([
 			new GetDecksTool().execute({}, signal),
 			new GetModelsTool().execute({}, signal)

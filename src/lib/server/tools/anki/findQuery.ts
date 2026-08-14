@@ -1,5 +1,6 @@
 import { ToolError } from '../tool';
 import { GetDecksTool } from './getDecksTool';
+import type { JsonSchemaArgument, JsonValue } from '$lib/json';
 
 const VALID_STATES = new Set(['new', 'due', 'learn', 'review', 'suspended', 'buried']);
 
@@ -14,61 +15,49 @@ export type FindArgs = {
 	term?: string;
 };
 
-export const FIND_PARAMETERS = [
-	{
-		name: 'deck',
-		type: 'string',
-		description: 'Deck name to search in.',
-		required: true
-	},
-	{
-		name: 'rated_days',
+export const FIND_PROPERTIES: Record<string, JsonSchemaArgument> = {
+	deck: { type: 'string', description: 'Deck name to search in.' },
+	rated_days: {
 		type: 'integer',
 		description: 'Limit to cards rated within the last N days (1 = today).',
-		required: false
+		optional: true
 	},
-	{
-		name: 'rated_ease',
+	rated_ease: {
 		type: 'integer',
 		description:
 			'Rating to filter by: 1=Again(failed), 2=Hard, 3=Good, 4=Easy. Only applies when rated_days is set. Omit to match any rating.',
-		required: false
+		optional: true
 	},
-	{
-		name: 'added',
+	added: {
 		type: 'integer',
 		description: 'Limit to cards added within the last N days (1 = today).',
-		required: false
+		optional: true
 	},
-	{
-		name: 'states',
+	states: {
 		type: 'array',
 		items: { type: 'string' },
 		description: 'Card state filters. Valid values: new, due, learn, review, suspended, buried.',
-		required: false
+		optional: true
 	},
-	{
-		name: 'props',
+	props: {
 		type: 'array',
 		items: { type: 'string' },
 		description: 'Property comparisons without the prop: prefix, e.g. lapses>3, ease<2.5, ivl<=7.',
-		required: false
+		optional: true
 	},
-	{
-		name: 'field',
+	field: {
 		type: 'string',
 		description:
 			'Note field to search in (e.g. Expression, Front, Meaning). Must be set together with term.',
-		required: false
+		optional: true
 	},
-	{
-		name: 'term',
+	term: {
 		type: 'string',
 		description:
 			'Text to search for within field. Use * as wildcard — *犬* matches anything containing 犬, 犬* matches values starting with 犬.',
-		required: false
+		optional: true
 	}
-] as const;
+};
 
 export const FIND_DESCRIPTION =
 	'Common requests — use exactly these, they are not interchangeable:\n' +
@@ -95,7 +84,7 @@ export const FIND_DESCRIPTION =
 	'  field:Expression term:*犬* → Expression field contains 犬';
 
 export async function validateFindArgs(
-	args: Record<string, unknown>,
+	args: Record<string, JsonValue>,
 	signal: AbortSignal
 ): Promise<FindArgs> {
 	const decks = JSON.parse(await new GetDecksTool().execute({}, signal)) as string[];

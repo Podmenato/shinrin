@@ -1,6 +1,7 @@
 import type { Tool, ToolDefinition } from './tool';
 import { db } from '../db/index';
 import { memories } from '../db/schema';
+import { toJsonObjectSchema, type JsonValue } from '$lib/json';
 
 export class SaveMemoryTool implements Tool {
 	definition: ToolDefinition;
@@ -12,24 +13,17 @@ export class SaveMemoryTool implements Tool {
 			name: 'save_memory',
 			description:
 				'Persist a piece of information about the user under a short key. Use this to remember stable facts and preferences across sessions. Overwrites any existing value for the same key — check the memories already listed in your context before picking a new key, and reuse an existing one if it covers the same thing.',
-			parameters: [
-				{
-					name: 'key',
+			parameters: toJsonObjectSchema({
+				key: {
 					type: 'string',
-					required: true,
 					description: "Short identifier for the memory (e.g. 'jlpt_level', 'teaching_style')."
 				},
-				{
-					name: 'value',
-					type: 'string',
-					required: true,
-					description: 'The content to store.'
-				}
-			]
+				value: { type: 'string', description: 'The content to store.' }
+			})
 		};
 	}
 
-	async execute(args: Record<string, unknown>): Promise<string> {
+	async execute(args: Record<string, JsonValue>): Promise<string> {
 		const key = args.key as string;
 		const value = args.value as string;
 

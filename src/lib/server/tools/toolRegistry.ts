@@ -19,6 +19,7 @@ import { CreateTopicTool } from './createTopicTool';
 import { UpdateTopicTool } from './updateTopicTool';
 import { CreateMistakeTool } from './createMistakeTool';
 import { UpdateMistakeTool } from './updateMistakeTool';
+import { PresentQuizTool } from './presentQuizTool';
 
 export type ToolContext = { agentId: string; subjectId: string | null; urls: string[] };
 
@@ -33,7 +34,8 @@ const registry: Record<string, () => Tool> = {
 	cards_info: () => new CardsInfoTool(),
 	get_intervals: () => new GetIntervalsTool(),
 	update_topic: () => new UpdateTopicTool(),
-	update_mistake: () => new UpdateMistakeTool()
+	update_mistake: () => new UpdateMistakeTool(),
+	present_quiz: () => new PresentQuizTool()
 };
 
 const contextualRegistry: Record<string, (ctx: ToolContext) => Tool | null> = {

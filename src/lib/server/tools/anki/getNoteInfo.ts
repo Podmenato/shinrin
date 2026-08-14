@@ -1,6 +1,7 @@
 import type { Tool, ToolDefinition } from '../tool';
 import { ankiRequest } from './ankiClient';
 import type { KanjiFields, VocabFields } from './noteTypes';
+import { toJsonObjectSchema, type JsonValue } from '$lib/json';
 
 const KANJI_MODEL = 'Japanese Kanji';
 const JAPANESE_VOCAB_MODEL = 'Japanese vocab';
@@ -39,18 +40,16 @@ export class GetNoteInfoTool implements Tool {
 		name: 'get_note_info',
 		description:
 			'Returns full note data (fields, tags, model) for a list of note IDs. Use this on a small, targeted set of IDs from find_notes — not on large results.',
-		parameters: [
-			{
-				name: 'noteIds',
+		parameters: toJsonObjectSchema({
+			noteIds: {
 				type: 'array',
 				items: { type: 'integer' },
-				description: 'Array of note IDs to fetch',
-				required: true
+				description: 'Array of note IDs to fetch'
 			}
-		]
+		})
 	};
 
-	async execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string> {
+	async execute(args: Record<string, JsonValue>, signal: AbortSignal): Promise<string> {
 		const notes = await ankiRequest<RawNoteInfo[]>('notesInfo', { notes: args.noteIds }, signal);
 
 		const cleanedNotes = notes.map((note) => {

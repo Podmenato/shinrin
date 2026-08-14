@@ -1,6 +1,7 @@
 import type { Tool, ToolDefinition } from '../tool';
 import { ankiRequest } from './ankiClient';
-import { FIND_DESCRIPTION, FIND_PARAMETERS, buildFindQuery, validateFindArgs } from './findQuery';
+import { FIND_DESCRIPTION, FIND_PROPERTIES, buildFindQuery, validateFindArgs } from './findQuery';
+import { toJsonObjectSchema, type JsonValue } from '$lib/json';
 
 export class FindTool implements Tool {
 	definition: ToolDefinition = {
@@ -11,18 +12,17 @@ export class FindTool implements Tool {
 			'  type:note — returns note IDs. Use when you need note-level data or to check for duplicates.\n' +
 			'\n' +
 			FIND_DESCRIPTION,
-		parameters: [
-			{
-				name: 'type',
+		parameters: toJsonObjectSchema({
+			type: {
 				type: 'string',
 				description: 'What to search: "card" (default) or "note".',
-				required: false
+				optional: true
 			},
-			...FIND_PARAMETERS
-		]
+			...FIND_PROPERTIES
+		})
 	};
 
-	async execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string> {
+	async execute(args: Record<string, JsonValue>, signal: AbortSignal): Promise<string> {
 		const type = args.type === 'note' ? 'note' : 'card';
 		const action = type === 'note' ? 'findNotes' : 'findCards';
 

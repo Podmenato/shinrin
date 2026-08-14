@@ -3,6 +3,7 @@ import { ToolError } from './tool';
 import { db } from '../db/index';
 import { mistakeObservations } from '../db/schema';
 import { eq } from 'drizzle-orm';
+import { toJsonObjectSchema, type JsonValue } from '$lib/json';
 
 export class UpdateMistakeTool implements Tool {
 	definition: ToolDefinition;
@@ -12,24 +13,17 @@ export class UpdateMistakeTool implements Tool {
 			name: 'update_mistake',
 			description:
 				'Add a follow-up note to an existing mistake observation, identified by its id — appended with a timestamp, not merged or rewritten.',
-			parameters: [
-				{
-					name: 'id',
+			parameters: toJsonObjectSchema({
+				id: { type: 'string', description: 'The id of the existing mistake to update.' },
+				text: {
 					type: 'string',
-					required: true,
-					description: 'The id of the existing mistake to update.'
-				},
-				{
-					name: 'text',
-					type: 'string',
-					required: true,
 					description: 'Note to append — new context, a recurrence, a correction, etc.'
 				}
-			]
+			})
 		};
 	}
 
-	async execute(args: Record<string, unknown>): Promise<string> {
+	async execute(args: Record<string, JsonValue>): Promise<string> {
 		const id = args.id as string;
 		const text = args.text as string;
 

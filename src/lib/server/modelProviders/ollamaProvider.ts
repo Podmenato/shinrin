@@ -28,21 +28,11 @@ function toOllamaTool(tool: Tool): OllamaTool {
 		function: {
 			name: tool.definition.name,
 			description: tool.definition.description,
-			parameters: {
-				type: 'object',
-				properties: Object.fromEntries(
-					tool.definition.parameters.map((param) => [
-						param.name,
-						{
-							type: param.type,
-							...(param.description ? { description: param.description } : {}),
-							...(param.items ? { items: param.items } : {}),
-								...(param.enum ? { enum: param.enum } : {})
-						}
-					])
-				),
-				required: tool.definition.parameters.filter((p) => p.required).map((p) => p.name)
-			}
+			// Ollama's own Tool type models only one flat level of properties (no nested `properties`
+			// for an object-typed field, `items` typed `any`) — it forwards whatever JSON it's given to
+			// the underlying model, and our JsonObjectSchema already matches that real wire shape
+			// exactly, just more precisely than Ollama's own .d.ts does.
+			parameters: tool.definition.parameters as OllamaTool['function']['parameters']
 		}
 	};
 }

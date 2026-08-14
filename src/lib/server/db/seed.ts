@@ -152,7 +152,9 @@ await db
 		{ name: 'create_topic', isSubjectRequired: true },
 		{ name: 'update_topic' },
 		{ name: 'create_mistake', isSubjectRequired: true },
-		{ name: 'update_mistake' }
+		{ name: 'update_mistake' },
+		{ name: 'fetch_url' },
+		{ name: 'present_quiz' }
 	])
 	.onConflictDoNothing();
 
@@ -176,7 +178,9 @@ const LANGUAGE_AGENT_TOOL_NAMES = [
 	'create_topic',
 	'update_topic',
 	'create_mistake',
-	'update_mistake'
+	'update_mistake',
+	'fetch_url',
+	'present_quiz'
 ];
 
 // add_note is deliberately excluded — add_sentence_note is the preferred, less error-prone path.

@@ -6,6 +6,7 @@ import { asc, eq } from 'drizzle-orm';
 import { Agent } from '$lib/server/agent';
 import { OllamaProvider } from '$lib/server/modelProviders/ollamaProvider';
 import { sessionRegistry } from '$lib/server/sessionRegistry';
+import type { JsonValue } from '$lib/json';
 import * as v from 'valibot';
 
 /** Returns a session along with its agent, for display in the chat screen header. */
@@ -50,7 +51,7 @@ export const getSessionMessages = query(v.pipe(v.string(), v.uuid()), async (ses
 			createdAt: m.createdAt,
 			toolCalls: m.messageToolCalls.map((tc) => ({
 				name: tc.tool.name,
-				args: tc.args as Record<string, string>
+				args: tc.args as Record<string, JsonValue>
 			}))
 		}));
 });

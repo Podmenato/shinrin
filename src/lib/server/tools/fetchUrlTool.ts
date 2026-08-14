@@ -4,6 +4,7 @@ import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import type { Tool, ToolDefinition } from './tool';
 import { ToolError } from './tool';
+import { toJsonObjectSchema, type JsonValue } from '$lib/json';
 
 // TODO: this module will most likely need massive optimization rework, to save context and eliminate
 //  unnecessary text
@@ -55,21 +56,19 @@ export class FetchUrlTool implements Tool {
 				'content as Markdown (title, byline, content). Works well on static/server-rendered pages — ' +
 				'Wikipedia, blogs, news articles. Does not execute JavaScript, so JS-rendered or paywalled ' +
 				'pages may return empty or incomplete content.',
-			parameters: [
-				{
-					name: 'url',
+			parameters: toJsonObjectSchema({
+				url: {
 					type: 'string',
-					required: true,
 					enum: [...this.urlsByLabel.keys()],
 					description:
 						'Which pasted URL to fetch: ' +
 						[...this.urlsByLabel.entries()].map(([l, u]) => `${l} = ${u}`).join(', ')
 				}
-			]
+			})
 		};
 	}
 
-	async execute(args: Record<string, unknown>, signal: AbortSignal): Promise<string> {
+	async execute(args: Record<string, JsonValue>, signal: AbortSignal): Promise<string> {
 		const chosen = args.url;
 		const url = typeof chosen === 'string' ? this.urlsByLabel.get(chosen) : undefined;
 		if (!url) {

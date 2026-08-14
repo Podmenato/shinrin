@@ -7,10 +7,11 @@ import {
 	tools as toolsTable
 } from './db/schema';
 import type { ModelProvider } from './modelProviders/modelProvider';
+import type { JsonValue } from '$lib/json';
 
 export type ToolCall = {
 	name: string;
-	args: Record<string, string>;
+	args: Record<string, JsonValue>;
 };
 
 export type Message = {
@@ -104,7 +105,7 @@ export class ContextManager {
 				msg.messageToolCalls.length > 0
 					? msg.messageToolCalls.map((tc) => ({
 							name: tc.tool.name,
-							args: tc.args as Record<string, string>
+							args: tc.args as Record<string, JsonValue>
 						}))
 					: undefined
 		}));
