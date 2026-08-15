@@ -346,7 +346,8 @@ there was no export/import step — just a schema rewrite.
   tools it has (via `agent_tools`); a `sessions` row is one conversation
   with a chosen model; `memories` is per-agent persistent state; `study_topics`
   / `mistake_observations` are per-*subject* (not per-agent — see "Subjects"
-  below) persistent state the agent writes to itself via tools.
+  below) persistent state the agent writes to itself via tools. `stories` is
+  neither — it's subject-*independent*; see "Stories" below.
 - [src/lib/server/db/seed.ts](src/lib/server/db/seed.ts) currently seeds two
   example agents (Japanese, Mandarin language tutors) with prompts and tool
   assignments — this is example/dev content, not fixed product config.
@@ -403,6 +404,108 @@ there was no export/import step — just a schema rewrite.
   Assigning a subagent is also subject-gated: a subject-tied subagent can only
   go to a parent with the same subject or no subject (`getAssignableSubagents`,
   re-validated in `saveAgent`).
+- **Stories** — a fourth persistent-block type alongside memories/topics/
+  mistakes, but deliberately unlike them in shape: bigger, interactive
+  content the user can revisit (a saved article, a roleplay transcript, a
+  work session logged from an external tool), not a status field or a note
+  log. See [schema.ts](src/lib/server/db/schema.ts) (`stories`,
+  `story_content`, `files`, `story_resources`),
+  [stories.remote.ts](src/lib/stories.remote.ts), and `src/routes/stories/`.
+  - **`stories` itself has no `subjectId` — deliberately.** A story is the
+    same content regardless of which subject/language it's being studied
+    through (the seeded example: an NHK article saved natively in Japanese,
+    also usable by a Mandarin agent — same story, different language). The
+    only place a subject attaches is `story_content` (`storyId`, `subjectId`,
+    `content`, `stale`, timestamps, `unique(storyId, subjectId)`) — one row
+    per subject a story currently has content in. The row matching a story's
+    originating subject isn't special-cased anywhere in the schema; it's
+    just the first `story_content` row that happened to get written.
+  - **Resources vs. content is a deliberate split**, not redundancy: a
+    `story_resources` row (join: `storyId` + `fileId`, plus a `label`) points
+    at the *original, unfiltered* source material — kept in one language
+    only, never translated, since a full translated webpage has essentially
+    no use case. `story_content` holds a *concise, normal-sized* distillation
+    actually used for interaction — not shrunk to a few bullet points, just
+    not the raw source — and is the thing that gets a variant per subject.
+    Files themselves live on disk, not in SQLite (`files`: `path`,
+    `mimeType`, `sizeBytes`) — same reasoning as the Postgres→SQLite move
+    above, plus this table is intentionally generic (not story-specific) so
+    a later RAG feature can reuse it without a parallel files table. This
+    also ruled out a polymorphic `(resourceType, resourceId)` association
+    (à la Rails ActiveStorage) in favor of the real, FK-checkable
+    `story_resources` join — a polymorphic pair can't carry a real
+    `.references()` constraint in SQLite, which every other relation in this
+    schema relies on.
+  - **`story_content.stale`** exists so a resource update can flag every
+    language variant as needing a re-check, without inferring staleness by
+    comparing a variant's `updatedAt` against `MAX(resource.updatedAt)`
+    across a one-to-many `story_resources` relation — that comparison is
+    exactly the kind of derived multi-row check that's easy to get subtly
+    wrong (a resource touched for unrelated reasons would false-flag
+    everything; timestamp granularity could false-negative). **Not yet
+    wired up**: nothing currently sets `stale = true` anywhere, because
+    nothing yet writes `story_resources` — that logic arrives together with
+    whatever first writes resources (expected: the separate work-sessions
+    MCP effort), not invented speculatively here.
+  - **`save_story` tool** ([saveStoryTool.ts](src/lib/server/tools/saveStoryTool.ts))
+    — a single tool taking a `mode: 'create' | 'update'` enum, rather than
+    this project's usual `create_*`/`update_*` split (see `create_topic`/
+    `update_topic` above). This is an explicit experiment, not yet proven
+    better: the upside is less standing per-turn schema overhead (Ollama
+    resends the full tool list every turn, so one tool beats two, compounded
+    across a conversation); the downside is real — JSON Schema's `required`
+    can express "always required," not "required only when `mode` is X," so
+    that conditional requiredness has to be enforced at runtime instead of
+    structurally, which is a weaker signal for a local model than the
+    `create_topic`/`update_topic` split gets for free. Validation is pulled
+    into a private `validateArgs()` that returns a mode-discriminated union
+    (`{ mode: 'create'; title; content? } | { mode: 'update'; id; content }`),
+    matching the `validateArgs` convention already used by
+    [addNoteTool.ts](src/lib/server/tools/anki/addNoteTool.ts)/
+    [addSentenceNoteTool.ts](src/lib/server/tools/anki/addSentenceNoteTool.ts)/
+    [findQuery.ts](src/lib/server/tools/anki/findQuery.ts) — `execute()` just
+    branches on the validated result instead of mixing validation into the
+    DB-writing logic.
+    - `mode: 'create'` — `title` required, `content` optional: a story can
+      exist with zero content (e.g. before any resources are attached).
+      Creating the story row itself needs no subject at all; a subject is
+      only required at the moment content is actually given (content is
+      always saved into the calling agent's own `ctx.subjectId`). This is
+      why `save_story` is **not** `isSubjectRequired`-gated the way
+      `create_topic`/`create_mistake` are — a subject-less agent can still
+      create a (content-less) story.
+    - `mode: 'update'` — `id` + `content` both required; upserts
+      (`onConflictDoUpdate` on `unique(storyId, subjectId)`) the calling
+      agent's own subject's `story_content` row — a genuine overwrite (e.g.
+      a better-written version, a fresh translation), not an append like
+      `update_topic`'s note log.
+  - **`/files/[fileId]` server route** ([+server.ts](<src/routes/files/[fileId]/+server.ts>))
+    — the first plain `+server.ts` endpoint in the app (everywhere else uses
+    remote functions); needed because a resource's on-disk path can't be
+    linked to directly from the browser. Reads the file, sets
+    `Content-Disposition: inline` so a resource link opens in a new tab
+    instead of downloading. `Content-Type` explicitly appends `; charset=
+    utf-8` for `text/*` mimetypes — without it, CJK resource text renders as
+    mojibake, since a browser defaults `text/plain` with no charset to
+    Latin-1, even though the file's on-disk bytes were correct UTF-8 all
+    along (`writeFileSync`'s default encoding).
+  - UI: `/stories` is a read-only `DataTable` list (same pattern as
+    Topics/Mistakes — stories are populated by tools, not a manual form),
+    showing every subject a story currently has content in (aggregated
+    across `story_content`) rather than one fixed owner subject.
+    `/stories/[storyId]` uses shadcn-svelte `Tabs` (first usage in the app)
+    — one tab per subject's content variant, with a `Stale` badge when
+    flagged; the initially-selected tab is a plain `$state(...)` initializer
+    computed once from the already-resolved `story` data, not an `$effect`
+    (see "UI / components" below — this was the case that prompted that
+    rule). Resources render as real links to `/files/[fileId]`,
+    `target="_blank"`.
+  - Seed data ([seed.ts](src/lib/server/db/seed.ts) `STORY_SEEDS`)
+    deliberately includes one cross-subject example (an NHK-style article
+    with both Japanese and Mandarin `story_content` rows, plus a real `.txt`
+    resource file written to `.data/files/` at seed time) specifically to
+    exercise the subject-independence design, alongside two ordinary
+    single-subject stories.
 
 ## Routes
 
