@@ -239,16 +239,109 @@ there was no export/import step — just a schema rewrite.
     long articles — a long enough page could still overflow `NUM_CTX` even
     after link/image stripping. Flagged in-file (see the module's top-of-file
     `TODO`), not yet solved.
-  - Required adding `enum?: string[]` to `ToolParameter`
-    ([tool.ts](src/lib/server/tools/tool.ts)), threaded through
-    `toOllamaTool()` in `ollamaProvider.ts` — the `ollama` npm package's own
-    `Tool` type already supported it, this was just never wired up before.
-    Kept as a flat optional field alongside `type`/`items` rather than a
-    separate discriminated variant: mirrors both JSON Schema itself (`enum`
-    is a constraint keyword that composes with `type`, not a type of its
-    own) and Anthropic/Google's actual tool-schema formats (both treat
-    `enum` the same flat way per their docs), and matches the precedent
-    `items` already set in this same type.
+  - Required adding `enum?: string[]` to the tool-parameter schema type
+    (now `JsonSchema`, see below — at the time this was `ToolParameter`),
+    threaded through `toOllamaTool()` in `ollamaProvider.ts` — the `ollama`
+    npm package's own `Tool` type already supported it, this was just never
+    wired up before. Kept as a flat optional field alongside `type`/`items`
+    rather than a separate discriminated variant: mirrors both JSON Schema
+    itself (`enum` is a constraint keyword that composes with `type`, not a
+    type of its own) and Anthropic/Google's actual tool-schema formats (both
+    treat `enum` the same flat way per their docs), and matches the
+    precedent `items` already set in this same type.
+- **Tool parameter schemas are real JSON Schema, not a custom shape**
+  ([src/lib/json.ts](src/lib/json.ts)) — `ToolDefinition.parameters`
+  ([tool.ts](src/lib/server/tools/tool.ts)) is a `JsonObjectSchema`, matching
+  what Anthropic's `input_schema`, OpenAI's `parameters`, and Ollama's own
+  `Tool.function.parameters` all expect on the wire — confirmed directly
+  against Anthropic's and OpenAI's docs: the root schema must be
+  `type: object` (a tool call is always "invoke by name with named
+  arguments," so there's no shape a lone parameter list could be other than
+  an object), and `required` is a flat array of property names beside
+  `properties`, never a per-property flag — it's only ever meaningful for
+  object schemas, since only objects have named properties that can be
+  present or absent. `JsonSchema` itself is a small recursive discriminated
+  union (string/number/integer/boolean/array/object) covering exactly what
+  tool-calling needs — unbounded nesting in both directions (array-of-arrays,
+  object-of-objects) — not the full JSON Schema spec (no `$ref`, `oneOf`,
+  etc.), since those aren't needed here and support for them is inconsistent
+  across providers/local models anyway.
+  This replaced an earlier `ToolParameter[]` design (flat array, `name` +
+  `required: boolean` as sibling fields per entry) that wasn't actually
+  JSON-Schema-shaped — every additional provider adapter would have had to
+  redo the same recursive reshape work independently. With `JsonObjectSchema`
+  as the canonical stored type, `toOllamaTool()` collapsed from two recursive
+  conversion functions to a single cast (needed only because Ollama's own
+  `.d.ts` types `items`/nested `properties` as `any` — far looser than what
+  it actually accepts on the wire; the cast is the one seam between our
+  precise type and a third-party type declaration that's coarser than its
+  real behavior). A hypothetical `toAnthropicTool`/`toOpenAITool` would each
+  be one line (`{ name, description, input_schema: tool.definition.parameters }`)
+  — the expensive recursive-reshape work now happens once, not once per
+  provider, whenever a second provider is actually added (still Ollama-only
+  today).
+  **Authoring ergonomics vs. wire format, kept deliberately separate:**
+  writing `required: [...]` by hand as a second, parallel list (easy to typo
+  or forget to update after a rename) wasn't acceptable, but neither was
+  putting `optional`/`required` directly on `JsonSchema` itself — required-
+  ness isn't a property of a *shape*, it's a property of the *relationship*
+  between a name and its containing object (the same string schema can be
+  required in one tool and optional in another). Resolved with a narrow,
+  authoring-only layer: `JsonSchemaArgument = JsonSchema & { optional?: true }`
+  plus `toJsonObjectSchema(properties: Record<string, JsonSchemaArgument>):
+  JsonObjectSchema`, which derives `required` from whichever properties
+  *aren't* marked `optional` — there's no separate array to keep in sync, and
+  the real stored type (what every tool's `parameters` field actually is)
+  never carries the authoring-only `optional` flag. Every existing tool
+  definition was rewritten onto this.
+- **`present_quiz` tool** ([presentQuizTool.ts](src/lib/server/tools/presentQuizTool.ts)) —
+  agent-authored interactive quizzes, rendered inline in the chat transcript
+  instead of as a generic tool-call JSON dump. Question shapes are a genuine
+  discriminated union — `SingleChoiceQuestion`/`MultipleChoiceQuestion` in
+  [src/lib/quiz.ts](src/lib/quiz.ts) (valibot `v.variant('questionType', [...])`)
+  are fully independent shapes, not one shape sharing a polymorphic `answer`
+  field, deliberately structured to accept more question types later (e.g.
+  an `open_form` type with no `answer` field at all) without reworking
+  existing ones — the discriminant enum the model actually sees stays
+  exactly `['single_choice', 'multiple_choice']` until a new type is really
+  built, per this project's "no half-finished implementations" rule; the
+  extensibility is in the union's *shape*, not a pre-built unused branch.
+  The model supplies the correct answer(s) directly in the tool call args
+  (it already knows them) as an index/indices into `options` — always an
+  array on the wire even for `single_choice` (simpler and more reliable for
+  a local model to produce than a same-key field whose JSON type changes
+  based on a sibling value), normalized down to a bare `number` by
+  `singleChoiceQuestionSchema`'s own `v.transform`, so downstream code
+  (grading, rendering) works with a real distinct shape per type instead of
+  a length-1-array special case. Because the answer already lives in the
+  persisted `messageToolCalls.args`, grading in
+  [quiz.svelte](src/routes/chat/[sessionId]/quiz.svelte) is fully
+  deterministic client-side — no extra model round-trip needed.
+  The question-type discriminant is named `questionType`, not `type` —
+  originally named `type`, which collided with JSON Schema's own `type`
+  keyword one level down in that same property's own schema
+  (`{ type: 'string', enum: [...] }`) and reliably confused a local model
+  into omitting the field entirely: observed live, every question in a real
+  quiz call arrived with `answer`/`options`/`question` but no `type` at all,
+  despite the model correctly inferring single- vs multiple-choice from how
+  many indices it put in `answer` — it understood the semantics but never
+  wrote the key stating them.
+  Rendering: [chat-message.svelte](src/routes/chat/[sessionId]/chat-message.svelte)
+  special-cases `toolCall.name === 'present_quiz'` to render `<Quiz>` instead
+  of the generic collapsed-JSON `<details>` block used for every other tool
+  call — important beyond styling, since the generic block would otherwise
+  print the answer key directly next to the quiz. `single-choice-question.svelte`/
+  `multiple-choice-question.svelte` use shadcn-svelte's `RadioGroup`/`Checkbox`
+  plus the `Field`/`FieldSet`/`FieldLegend` layout system (matching
+  `agent-form.svelte`'s existing form conventions), not hand-rolled markup;
+  `radio-group` was installed specifically for this — `field-set.svelte`'s
+  own CSS already had `has-[>[data-slot=radio-group]]` rules hinting it was
+  the intended pairing, before the component itself existed in the project.
+  **Deliberately not built yet:** a `quiz_attempts` table, a dedicated
+  `/quiz` history/retry route, and feeding results back into
+  `create_mistake`/`update_topic` — scoped out explicitly to keep the first
+  pass reviewable; the tool/schema/component split is structured so each
+  slots in later without a rework.
 - DB rows drive config: an `agents` row defines a system prompt and which
   tools it has (via `agent_tools`); a `sessions` row is one conversation
   with a chosen model; `memories` is per-agent persistent state; `study_topics`
