@@ -20,6 +20,7 @@ import { UpdateTopicTool } from './updateTopicTool';
 import { CreateMistakeTool } from './createMistakeTool';
 import { UpdateMistakeTool } from './updateMistakeTool';
 import { PresentQuizTool } from './presentQuizTool';
+import { SaveStoryTool } from './saveStoryTool';
 
 export type ToolContext = { agentId: string; subjectId: string | null; urls: string[] };
 
@@ -43,6 +44,7 @@ const contextualRegistry: Record<string, (ctx: ToolContext) => Tool | null> = {
 	delete_memory: (ctx) => new DeleteMemoryTool(ctx.agentId),
 	create_topic: (ctx) => new CreateTopicTool(ctx.subjectId),
 	create_mistake: (ctx) => new CreateMistakeTool(ctx.subjectId),
+	save_story: (ctx) => new SaveStoryTool(ctx.subjectId),
 	fetch_url: (ctx) => (ctx.urls.length > 0 ? new FetchUrlTool(ctx.urls) : null)
 };
 

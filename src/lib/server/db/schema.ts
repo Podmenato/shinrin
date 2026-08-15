@@ -157,10 +157,56 @@ export const mistakeObservations = sqliteTable('mistake_observations', {
 	createdAt: createdAt()
 });
 
+export const stories = sqliteTable('stories', {
+	id: generateUUID(),
+	title: text('title').notNull(),
+	createdAt: createdAt(),
+	updatedAt: updatedAt()
+});
+
+export const storyContent = sqliteTable(
+	'story_content',
+	{
+		id: generateUUID(),
+		storyId: text('story_id')
+			.notNull()
+			.references(() => stories.id),
+		subjectId: text('subject_id')
+			.notNull()
+			.references(() => subjects.id),
+		content: text('content').notNull(),
+		stale: integer('stale', { mode: 'boolean' }).notNull().default(false),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [unique().on(t.storyId, t.subjectId)]
+);
+
+export const files = sqliteTable('files', {
+	id: generateUUID(),
+	path: text('path').notNull(),
+	mimeType: text('mime_type').notNull(),
+	sizeBytes: integer('size_bytes').notNull(),
+	createdAt: createdAt()
+});
+
+export const storyResources = sqliteTable('story_resources', {
+	id: generateUUID(),
+	storyId: text('story_id')
+		.notNull()
+		.references(() => stories.id),
+	fileId: text('file_id')
+		.notNull()
+		.references(() => files.id),
+	label: text('label'),
+	createdAt: createdAt()
+});
+
 export const subjectsRelations = relations(subjects, ({ many }) => ({
 	agents: many(agents),
 	studyTopics: many(studyTopics),
-	mistakeObservations: many(mistakeObservations)
+	mistakeObservations: many(mistakeObservations),
+	storyContent: many(storyContent)
 }));
 
 export const agentsRelations = relations(agents, ({ one, many }) => ({
@@ -218,4 +264,23 @@ export const studyTopicsRelations = relations(studyTopics, ({ one }) => ({
 
 export const mistakeObservationsRelations = relations(mistakeObservations, ({ one }) => ({
 	subject: one(subjects, { fields: [mistakeObservations.subjectId], references: [subjects.id] })
+}));
+
+export const storiesRelations = relations(stories, ({ many }) => ({
+	content: many(storyContent),
+	resources: many(storyResources)
+}));
+
+export const storyContentRelations = relations(storyContent, ({ one }) => ({
+	story: one(stories, { fields: [storyContent.storyId], references: [stories.id] }),
+	subject: one(subjects, { fields: [storyContent.subjectId], references: [subjects.id] })
+}));
+
+export const filesRelations = relations(files, ({ many }) => ({
+	storyResources: many(storyResources)
+}));
+
+export const storyResourcesRelations = relations(storyResources, ({ one }) => ({
+	story: one(stories, { fields: [storyResources.storyId], references: [stories.id] }),
+	file: one(files, { fields: [storyResources.fileId], references: [files.id] })
 }));

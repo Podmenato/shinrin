@@ -1,5 +1,5 @@
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema';
@@ -7,9 +7,13 @@ import {
 	agentSubagents,
 	agentTools,
 	agents,
+	files,
 	messages,
 	mistakeObservations,
 	sessions,
+	stories,
+	storyContent,
+	storyResources,
 	studyTopics,
 	subjects,
 	tools
@@ -153,6 +157,7 @@ await db
 		{ name: 'update_topic' },
 		{ name: 'create_mistake', isSubjectRequired: true },
 		{ name: 'update_mistake' },
+		{ name: 'save_story' },
 		{ name: 'fetch_url' },
 		{ name: 'present_quiz' }
 	])
@@ -179,6 +184,7 @@ const LANGUAGE_AGENT_TOOL_NAMES = [
 	'update_topic',
 	'create_mistake',
 	'update_mistake',
+	'save_story',
 	'fetch_url',
 	'present_quiz'
 ];
@@ -283,6 +289,135 @@ await db.insert(studyTopics).values(
 	})
 );
 
+// Stories are subject-independent — the same story can carry content variants
+// in several subjects (e.g. a Japanese article you also study in Mandarin).
+const STORY_SEEDS: {
+	title: string;
+	contents: { subjectName: string; content: string }[];
+	resource?: { label: string; fileName: string; text: string };
+}[] = [
+	{
+		title: 'NHK news: 台風接近のニュース',
+		contents: [
+			{
+				subjectName: 'Japanese',
+				content:
+					'台風接近のニュースの要約は次の通り。気象庁によると、大型で非常に強い台風が今週末にかけて日本列島に接近する見込みで、' +
+					'特に太平洋側の広い範囲で大雨と暴風に警戒が必要だという。\n\n' +
+					'すでに一部地域では風が強まり始めており、交通機関にも影響が出始めている。JRや私鉄各社は計画運休を検討していると発表し、' +
+					'空の便にも欠航が相次ぐ可能性がある。\n\n' +
+					'気象庁の担当者は、不要不急の外出を控えるとともに、河川の増水や土砂災害にも十分注意するよう呼びかけている。' +
+					'台風の進路によっては、週明けにかけても天候が不安定な状態が続く見通しだという。\n\n' +
+					'また、自治体によっては避難所の開設準備を始めているところもあり、今後の情報にも注意が必要だとしている。'
+			},
+			{
+				subjectName: 'Mandarin',
+				content:
+					'关于台风逼近的新闻摘要如下。据气象厅介绍,一个大型且威力强劲的台风预计将在本周末逼近日本列岛,' +
+					'尤其是太平洋沿岸的大范围地区需要警惕暴雨和强风。\n\n' +
+					'部分地区的风力已经开始增强,交通也开始受到影响。JR和多家私营铁路公司表示正在考虑计划性停运,' +
+					'航班也可能出现连续取消的情况。\n\n' +
+					'气象厅的负责人呼吁民众尽量避免非必要的外出,同时要充分注意河流水位上涨和山体滑坡等次生灾害。' +
+					'根据台风的路径,预计下周初天气仍可能持续不稳定。\n\n' +
+					'此外,部分地方政府已经开始准备开设避难所,提醒民众持续关注后续的最新消息。'
+			}
+		],
+		resource: {
+			label: 'Original article text',
+			fileName: 'nhk-typhoon-article.txt',
+			text:
+				'台風接近のニュース\n\n' +
+				'気象庁は8日、週末にかけて大型で非常に強い台風が日本列島に接近する見込みだと発表した。' +
+				'特に太平洋側の広い範囲では大雨と暴風による交通機関の乱れが予想されるとして、早めの備えを呼びかけている。\n\n' +
+				'気象庁によると、この台風は今後さらに勢力を強めながら北上を続け、週末には関東から東海にかけての地域に最も接近する見通し。' +
+				'伊豆諸島や紀伊半島などの沿岸部では、暴風とともに高波にも警戒が必要だという。\n\n' +
+				'すでに影響は出始めており、JR各社や大手私鉄は計画運休を検討していることを明らかにした。航空各社も、' +
+				'台風の進路次第では欠航が相次ぐ可能性があるとして、利用客に最新の運航情報を確認するよう呼びかけている。\n\n' +
+				'気象庁の担当者は記者会見で「不要不急の外出は控え、河川の増水や土砂災害の前兆となる異変にも十分注意してほしい」と述べた。' +
+				'また、自治体の中にはすでに避難所の開設準備を始めているところもあるという。\n\n' +
+				'台風の進路や速度によっては、週明けにかけても広い範囲で天候が不安定な状態が続く可能性があり、' +
+				'気象庁は今後の情報にも注意を続けるよう呼びかけている。'
+		}
+	},
+	{
+		title: 'Keigo job interview roleplay',
+		contents: [
+			{
+				subjectName: 'Japanese',
+				content:
+					'A roleplay dialogue practicing 敬語 in a job-interview setting, covering a full opening exchange.\n\n' +
+					'Interviewer: 「本日はお越しいただき、誠にありがとうございます。まず自己紹介をお願いできますでしょうか。」\n' +
+					'Candidate: 「はい、よろしくお願いいたします。私は田中と申します。前職では営業部にて三年間、法人向けの提案業務を担当しておりました。」\n' +
+					'Interviewer: 「ありがとうございます。前職で最も力を入れて取り組まれたことは何でしょうか。」\n' +
+					'Candidate: 「お客様との信頼関係の構築に特に力を入れておりました。ご要望を丁寧に伺い、社内の関係部署と連携しながら、' +
+					'最適な提案ができるよう努めておりました。」\n' +
+					'Interviewer: 「なるほど。では、ご自身の強みについて教えていただけますでしょうか。」\n' +
+					'Candidate: 「私の強みは、相手の立場に立って物事を考えられる点だと存じております。' +
+					'お客様だけでなく、社内のメンバーに対しても同様に接することを心がけております。」\n\n' +
+					'Notes: the interviewer consistently uses 尊敬語 forms (お越しいただき、教えていただけますでしょうか) ' +
+					'while the candidate consistently uses 謙譲語 (申します、存じております、伺い) — practice keeping the two ' +
+					'registers separate depending on whose action is being described.'
+			}
+		]
+	},
+	{
+		title: 'Tone sandhi practice notes',
+		contents: [
+			{
+				subjectName: 'Mandarin',
+				content:
+					'Working notes on 3rd-tone sandhi, collected across a few practice sessions.\n\n' +
+					'Rule 1 — two 3rd tones in a row: when two 3rd-tone syllables meet, the first shifts to a 2nd tone in speech. ' +
+					'你好 is said ní hǎo, not nǐ hǎo. 我很好 → 我 shifts to 2nd tone: wó hěn hǎo.\n\n' +
+					'Rule 2 — three or more 3rd tones in a row: groups usually resolve by grammatical structure rather than ' +
+					'strictly left-to-right. 我很好 already covered above; a longer chain like 我也很好 tends to break into ' +
+					'(我也)(很好) → wó yě hén hǎo, both pairs shifting independently rather than one long cascade.\n\n' +
+					'Practice sentences:\n' +
+					'你也很好 — both 你 and 也 shift up since they lead into another 3rd tone.\n' +
+					'我想买雨伞 — 我 and 想 both shift, since both are followed by another 3rd-tone syllable.\n' +
+					'展览很小 — 展 shifts before 览, and 很 shifts before 小.\n\n' +
+					'Common mistake to watch for: applying sandhi to isolated words read in citation form (e.g. reciting a ' +
+					'vocabulary list) — the rule only applies when syllables are actually spoken in sequence within a phrase.'
+			}
+		]
+	}
+];
+
+const seedFilesDir = join(dirname(process.env.DATABASE_URL!), 'files');
+mkdirSync(seedFilesDir, { recursive: true });
+
+await db.delete(storyResources);
+await db.delete(files);
+await db.delete(storyContent);
+await db.delete(stories);
+for (const seed of STORY_SEEDS) {
+	const [story] = await db.insert(stories).values({ title: seed.title }).returning();
+
+	await db.insert(storyContent).values(
+		seed.contents.flatMap(({ subjectName, content }) => {
+			const subject = subjectsByName.get(subjectName);
+			if (!subject) return [];
+			return [{ storyId: story.id, subjectId: subject.id, content }];
+		})
+	);
+
+	if (seed.resource) {
+		const path = join(seedFilesDir, seed.resource.fileName);
+		writeFileSync(path, seed.resource.text, 'utf-8');
+		const [file] = await db
+			.insert(files)
+			.values({
+				path,
+				mimeType: 'text/plain',
+				sizeBytes: Buffer.byteLength(seed.resource.text, 'utf-8')
+			})
+			.returning();
+		await db
+			.insert(storyResources)
+			.values({ storyId: story.id, fileId: file.id, label: seed.resource.label });
+	}
+}
+
 const SESSION_SEEDS: Record<
 	string,
 	{ name: string; model: string; messages: { role: 'user' | 'assistant'; content: string }[] }[]
@@ -374,6 +509,6 @@ for (const [agentName, sessionSeeds] of Object.entries(SESSION_SEEDS)) {
 }
 
 console.log(
-	'Seeded agents, tools, subjects, agent_tools, agent_subagents, mistake_observations, study_topics, sessions and messages.'
+	'Seeded agents, tools, subjects, agent_tools, agent_subagents, mistake_observations, study_topics, stories, story_content, files, story_resources, sessions and messages.'
 );
 client.close();

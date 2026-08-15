@@ -10,6 +10,7 @@
 	import ServerIcon from '@lucide/svelte/icons/server';
 	import CircleXIcon from '@lucide/svelte/icons/circle-x';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
+	import BookMarkedIcon from '@lucide/svelte/icons/book-marked';
 	import LibraryBigIcon from '@lucide/svelte/icons/library-big';
 	import SunIcon from '@lucide/svelte/icons/sun';
 	import MoonIcon from '@lucide/svelte/icons/moon';
@@ -20,6 +21,7 @@
 		{ title: 'Agents', href: resolve('/agents'), icon: BotIcon },
 		{ title: 'Mistakes', href: resolve('/mistakes'), icon: CircleXIcon },
 		{ title: 'Topics', href: resolve('/topics'), icon: BookOpenIcon },
+		{ title: 'Stories', href: resolve('/stories'), icon: BookMarkedIcon },
 		{ title: 'Subjects', href: resolve('/subjects'), icon: LibraryBigIcon }
 	];
 	const footerItems = [{ title: 'Ollama Settings', href: resolve('/ollama'), icon: ServerIcon }];

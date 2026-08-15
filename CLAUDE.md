@@ -643,6 +643,18 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
 
 ## UI / components
 
+- **Avoid `$effect`, especially for syncing state.** It's an escape hatch, not
+  a default tool. If you need to sync state to an external library (e.g.
+  D3), prefer `{@attach ...}`. If you need to run code in response to a user
+  interaction, put it directly in an event handler or a function binding. If
+  you need to log values for debugging, use `$inspect`. If you need to
+  observe something external to Svelte, use `createSubscriber`. A default
+  value derived from async-loaded data (e.g. the initially-selected tab)
+  should be a plain `$state(...)` initializer computed once from the
+  resolved value, not an `$effect` that writes state — see
+  [stories/[storyId]/+page.svelte](<src/routes/stories/[storyId]/+page.svelte>)
+  for the pattern (`let activeSubjectId = $state(story.content[0]?.subjectId ?? '')`
+  right after the awaited `$derived`, no effect needed).
 - Component library is **shadcn-svelte** (built on `bits-ui`). Installed
   components live in `src/lib/components/ui/*` (e.g. `button`, `card`,
   `sidebar`, `select`, `field`, `empty`, `spinner`, ...). When a screen
