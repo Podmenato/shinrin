@@ -7,6 +7,7 @@
 		"dev": "tsx scripts/dev.ts",
 		"dev-debug": "LOG_LEVEL=debug tsx scripts/dev.ts",
 		"dev-trace": "LOG_LEVEL=trace tsx scripts/dev.ts",
+		"mcp:server": "tsx scripts/mcp-server.ts",
 		"build": "vite build",
 		"start": "NODE_ENV=production node --env-file=.env.production build",
 		"preview": "vite preview",
@@ -28,7 +29,9 @@
 		"db:prod:studio": "drizzle-kit studio --config drizzle.config.prod.ts"
 	},
 	"dependencies": {
+		"@modelcontextprotocol/server": "^2.0.0",
 		"@mozilla/readability": "^0.6.0",
+		"@valibot/to-json-schema": "^1.7.1",
 		"better-sqlite3": "^13.0.3",
 		"dotenv": "^17.4.2",
 		"drizzle-valibot": "^0.4.2",

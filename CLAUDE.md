@@ -34,7 +34,7 @@ there was no export/import step — just a schema rewrite.
   **drizzle-kit does not support `node:sqlite` as a migration driver at
   all** ([drizzle-team/drizzle-orm#5471](https://github.com/drizzle-team/drizzle-orm/issues/5471))
   — you'd need `better-sqlite3` installed anyway just for `drizzle-kit
-  push`/`generate`/`migrate`, which defeats the "zero native deps" appeal
+push`/`generate`/`migrate`, which defeats the "zero native deps" appeal
   that's the whole reason to reach for `node:sqlite`. Being a native module,
   `better-sqlite3` needs `@electron/rebuild` in the eventual Electron
   packaging pipeline — a real step, but the most well-documented native
@@ -44,23 +44,21 @@ there was no export/import step — just a schema rewrite.
   uuid/boolean/timestamp types, so `generateUUID()`/`createdAt()`/`updatedAt()`
   are small local helper functions (not exported — just factored out of the
   per-table repetition) wrapping `text().$defaultFn(() =>
-  crypto.randomUUID())` and `integer({ mode: 'timestamp_ms' })`. Timestamps
+crypto.randomUUID())` and `integer({ mode: 'timestamp_ms' })`. Timestamps
   are **app-generated (`$defaultFn(() => new Date())`), not DB-generated**
   (no `default(sql\`(unixepoch())\`)`) — deliberately millisecond precision,
-  because `messages.createdAt` is the sole ordering key for a session's
-  transcript ([contextManager.ts](src/lib/server/contextManager.ts),
-  [sessions.remote.ts](src/lib/sessions.remote.ts) both `orderBy:
-  asc(createdAt)` with no secondary sort key) and a user message immediately
-  followed by an assistant reply can easily land in the same second.
-  `updatedAt` has no `$onUpdate` — matching the original Postgres schema, it
-  only reflects insert time unless a tool explicitly sets it (see
-  `saveMemoryTool.ts`/`updateTopicTool.ts`), so adding automatic bump-on-update
-  behavior here would have been a silent semantics change, not a faithful
-  port. `messageToolCalls.args` (Postgres `jsonb`) is `text({ mode: 'json'
+because `messages.createdAt`is the sole ordering key for a session's
+transcript ([contextManager.ts](src/lib/server/contextManager.ts),
+[sessions.remote.ts](src/lib/sessions.remote.ts) both`orderBy:
+  asc(createdAt)`with no secondary sort key) and a user message immediately
+followed by an assistant reply can easily land in the same second.`updatedAt`has no`$onUpdate`— matching the original Postgres schema, it
+only reflects insert time unless a tool explicitly sets it (see`saveMemoryTool.ts`/`updateTopicTool.ts`), so adding automatic bump-on-update
+behavior here would have been a silent semantics change, not a faithful
+port. `messageToolCalls.args`(Postgres`jsonb`) is `text({ mode: 'json'
   })` — SQLite has had real JSON query support (`json_extract`, `->`/`->>`)
-  since 3.38 (2022) and a binary JSONB storage optimization since 3.45
-  (2024), so this is not a capability loss for the debug-querying use case
-  that originally motivated `jsonb`, just a different storage encoding.
+since 3.38 (2022) and a binary JSONB storage optimization since 3.45
+(2024), so this is not a capability loss for the debug-querying use case
+that originally motivated `jsonb`, just a different storage encoding.
 - **Dev reset**: [clean.ts](src/lib/server/db/clean.ts) deletes the sqlite
   file (plus `-wal`/`-shm` sidecars, since `journal_mode = WAL` is set in
   [db/index.ts](src/lib/server/db/index.ts)) rather than dropping/recreating
@@ -73,7 +71,7 @@ there was no export/import step — just a schema rewrite.
 - **`db.transaction()` callbacks must be plain, non-`async` functions with no
   `await` inside** — `better-sqlite3`'s underlying `.transaction()` wrapper
   runs the callback synchronously and throws `Transaction function cannot
-  return a promise` if the return value is thenable, which an `async`
+return a promise` if the return value is thenable, which an `async`
   function's return value always is, regardless of what's inside it. This
   bit real code on the first migration pass: `postgres-js` transactions are
   async, so `saveAgent`/`deleteSession` in
@@ -91,7 +89,7 @@ there was no export/import step — just a schema rewrite.
   via the outer non-transactional `db`) — extracted the pure graph-BFS into
   a sync `ancestorsFromEdges(edges, agentId)` so it can run inline inside
   the sync transaction (`tx.select().from(agentSubagents).all()`) instead of
-  needing an awaited call. These are currently the *only* two
+  needing an awaited call. These are currently the _only_ two
   `db.transaction()` call sites in the app — chat message persistence
   ([contextManager.ts](src/lib/server/contextManager.ts)) never used
   `db.transaction()` at all (plain sequential `await db.insert(...)` calls,
@@ -115,10 +113,10 @@ there was no export/import step — just a schema rewrite.
   `AbortController` per call and passes `.signal` into `Agent.run(...)`;
   `run()` checks `signal.aborted` at loop/tool-call checkpoints and, on an
   abort-triggered rejection from the model call or a tool, resolves
-  *normally* with `"Cancelled by user."` (persisted as the final assistant
+  _normally_ with `"Cancelled by user."` (persisted as the final assistant
   message) instead of throwing — the `runAgent` caller never sees an error.
   `Tool.execute(args, signal)` and `ModelProvider.chat`/`chatStream(...,
-  signal)` take the same signal directly; there is no `Tool.cancel()`
+signal)` take the same signal directly; there is no `Tool.cancel()`
   method. An earlier design gave each tool its own `AbortController` plus a
   `cancel()` method that `Agent` forwarded to via a `currentTool` field —
   replaced after hitting a real race: [SubagentTool](src/lib/server/tools/subagentTool.ts)
@@ -164,7 +162,7 @@ there was no export/import step — just a schema rewrite.
   — see "Subjects" below), and `fetch_url` (`urls`, see below).
   `registry`/`contextualRegistry` are both factory maps
   (`Record<string, () => Tool>` / `Record<string, (ctx: ToolContext) => Tool
-  | null>`), not eager singletons — `getTools`/`getSubagentTools` build
+| null>`), not eager singletons — `getTools`/`getSubagentTools` build
   fresh instances on every call, so every session gets private `Tool`
   objects instead of sharing one instance across every session in the
   process. This was originally required so per-tool `AbortController`s
@@ -187,12 +185,12 @@ there was no export/import step — just a schema rewrite.
   pages (no JS execution) — covers Wikipedia and most blogs/news, not
   JS-hydrated or paywalled sites.
   - **The model can never type a URL itself.** `extractUserUrls()` regex-scans
-    *only* `role: 'user'` message text (never assistant output or tool
+    _only_ `role: 'user'` message text (never assistant output or tool
     results — no link-following) for `http(s)` URLs; the result becomes
     `ToolContext.urls`. `FetchUrlTool`'s constructor turns that list into
     single-letter labels (`A`, `B`, `C`…) and its `url` parameter is a
     closed `enum` of just those labels — the real URL only ever appears in
-    the tool's *description* text, never as something freeform the model
+    the tool's _description_ text, never as something freeform the model
     can type. `execute()` resolves the chosen label back to the real URL and
     rejects anything else. This mirrors Anthropic's own `web_fetch` tool
     (confirmed via their docs): it also refuses a model-invented URL, only
@@ -203,10 +201,10 @@ there was no export/import step — just a schema rewrite.
   - `ToolContext.urls` is computed fresh on every
     `Agent.createFromSession(sessionId, provider, prompt)` call
     ([agent.ts](src/lib/server/agent.ts)), scanning prior context
-    (`contextManager.build()`, filtered to `role: 'user'`) *plus* the
+    (`contextManager.build()`, filtered to `role: 'user'`) _plus_ the
     incoming `prompt` string itself. `prompt` has to be threaded in as an
     explicit third argument (not read off `ctx` later) because
-    `createFromSession` builds tools *before* `run()` ever calls
+    `createFromSession` builds tools _before_ `run()` ever calls
     `ctx.add({ role: 'user', content: prompt })` — without passing it
     separately, a URL pasted in the very message that asks about it
     wouldn't be visible to that same turn's tool list yet.
@@ -230,7 +228,7 @@ there was no export/import step — just a schema rewrite.
     `turndownService.remove('img')` — **`.remove()` doesn't actually win**
     for any tag Turndown already ships a built-in rule for. Confirmed by
     reading `turndown`'s source directly: its per-node rule lookup checks
-    the main rule list (built-ins + everything added via `addRule`) *before*
+    the main rule list (built-ins + everything added via `addRule`) _before_
     the separate list `.remove()` writes to, so a built-in `img` rule always
     matches first regardless. `addRule` works because it inserts at the
     front of that same main list, ahead of the built-in. Post-fix, the same
@@ -284,13 +282,13 @@ there was no export/import step — just a schema rewrite.
   writing `required: [...]` by hand as a second, parallel list (easy to typo
   or forget to update after a rename) wasn't acceptable, but neither was
   putting `optional`/`required` directly on `JsonSchema` itself — required-
-  ness isn't a property of a *shape*, it's a property of the *relationship*
+  ness isn't a property of a _shape_, it's a property of the _relationship_
   between a name and its containing object (the same string schema can be
   required in one tool and optional in another). Resolved with a narrow,
   authoring-only layer: `JsonSchemaArgument = JsonSchema & { optional?: true }`
   plus `toJsonObjectSchema(properties: Record<string, JsonSchemaArgument>):
-  JsonObjectSchema`, which derives `required` from whichever properties
-  *aren't* marked `optional` — there's no separate array to keep in sync, and
+JsonObjectSchema`, which derives `required` from whichever properties
+  _aren't_ marked `optional` — there's no separate array to keep in sync, and
   the real stored type (what every tool's `parameters` field actually is)
   never carries the authoring-only `optional` flag. Every existing tool
   definition was rewritten onto this.
@@ -305,7 +303,7 @@ there was no export/import step — just a schema rewrite.
   existing ones — the discriminant enum the model actually sees stays
   exactly `['single_choice', 'multiple_choice']` until a new type is really
   built, per this project's "no half-finished implementations" rule; the
-  extensibility is in the union's *shape*, not a pre-built unused branch.
+  extensibility is in the union's _shape_, not a pre-built unused branch.
   The model supplies the correct answer(s) directly in the tool call args
   (it already knows them) as an index/indices into `options` — always an
   array on the wire even for `single_choice` (simpler and more reliable for
@@ -345,9 +343,9 @@ there was no export/import step — just a schema rewrite.
 - DB rows drive config: an `agents` row defines a system prompt and which
   tools it has (via `agent_tools`); a `sessions` row is one conversation
   with a chosen model; `memories` is per-agent persistent state; `study_topics`
-  / `mistake_observations` are per-*subject* (not per-agent — see "Subjects"
+  / `mistake_observations` are per-_subject_ (not per-agent — see "Subjects"
   below) persistent state the agent writes to itself via tools. `stories` is
-  neither — it's subject-*independent*; see "Stories" below.
+  neither — it's subject-_independent_; see "Stories" below.
 - [src/lib/server/db/seed.ts](src/lib/server/db/seed.ts) currently seeds two
   example agents (Japanese, Mandarin language tutors) with prompts and tool
   assignments — this is example/dev content, not fixed product config.
@@ -366,7 +364,7 @@ there was no export/import step — just a schema rewrite.
   `agents.subagentDescription` to be set on every directly assigned subagent —
   it throws immediately (no generic-description fallback) if one is missing,
   since an undescribed subagent tool is effectively uncallable by the model.
-  This is checked eagerly for *all* of an agent's direct subagents whenever
+  This is checked eagerly for _all_ of an agent's direct subagents whenever
   that agent's session is created/resumed (`Agent.create`/`createFromSession`),
   not just the one actually invoked — so one misconfigured subagent breaks
   every session for every agent it's assigned to, not just calls to itself.
@@ -387,7 +385,7 @@ there was no export/import step — just a schema rewrite.
   [src/lib/subjects.remote.ts](src/lib/subjects.remote.ts) and
   `src/routes/subjects/`) is the ownership/routing key for `study_topics` and
   `mistake_observations` — both have a `subjectId` FK (`NOT NULL`), not an
-  `agentId` FK. `agents.subjectId` is a *nullable* FK, many-to-one: several
+  `agentId` FK. `agents.subjectId` is a _nullable_ FK, many-to-one: several
   agent "personas" for the same language (e.g. a grammar-focused agent and an
   easier/beginner one) can share one subject and therefore one progress/
   mistake pool, instead of fragmenting it per agent. A subject-less agent is
@@ -422,9 +420,9 @@ there was no export/import step — just a schema rewrite.
     just the first `story_content` row that happened to get written.
   - **Resources vs. content is a deliberate split**, not redundancy: a
     `story_resources` row (join: `storyId` + `fileId`, plus a `label`) points
-    at the *original, unfiltered* source material — kept in one language
+    at the _original, unfiltered_ source material — kept in one language
     only, never translated, since a full translated webpage has essentially
-    no use case. `story_content` holds a *concise, normal-sized* distillation
+    no use case. `story_content` holds a _concise, normal-sized_ distillation
     actually used for interaction — not shrunk to a few bullet points, just
     not the raw source — and is the thing that gets a variant per subject.
     Files themselves live on disk, not in SQLite (`files`: `path`,
@@ -479,13 +477,13 @@ there was no export/import step — just a schema rewrite.
       agent's own subject's `story_content` row — a genuine overwrite (e.g.
       a better-written version, a fresh translation), not an append like
       `update_topic`'s note log.
-  - **`/files/[fileId]` server route** ([+server.ts](<src/routes/files/[fileId]/+server.ts>))
+  - **`/files/[fileId]` server route** ([+server.ts](src/routes/files/[fileId]/+server.ts))
     — the first plain `+server.ts` endpoint in the app (everywhere else uses
     remote functions); needed because a resource's on-disk path can't be
     linked to directly from the browser. Reads the file, sets
     `Content-Disposition: inline` so a resource link opens in a new tab
     instead of downloading. `Content-Type` explicitly appends `; charset=
-    utf-8` for `text/*` mimetypes — without it, CJK resource text renders as
+utf-8` for `text/*` mimetypes — without it, CJK resource text renders as
     mojibake, since a browser defaults `text/plain` with no charset to
     Latin-1, even though the file's on-disk bytes were correct UTF-8 all
     along (`writeFileSync`'s default encoding).
@@ -506,6 +504,131 @@ there was no export/import step — just a schema rewrite.
     resource file written to `.data/files/` at seed time) specifically to
     exercise the subject-independence design, alongside two ordinary
     single-subject stories.
+
+## MCP server
+
+A second, independent tool-calling surface alongside the internal Ollama
+loop above — an MCP (Model Context Protocol) stdio server that lets
+_external_ clients (Claude Code, Claude Desktop) call into shinrin's own
+tools, rather than shinrin calling out to a model. Entrypoint:
+[scripts/mcp-server.ts](scripts/mcp-server.ts) (`pnpm mcp:server`); tool
+registration: [saveStoryMcpTool.ts](src/lib/server/mcp/tools/saveStoryMcpTool.ts).
+Only one tool exists so far, `save_story` — first use case was logging a
+work/coding session as material for later roleplay practice (see "Stories"
+above), but the tool itself is deliberately generic (any external tool can
+hand off reusable content this way), not work-session-specific — it was
+originally named `log_work_session` and renamed once that became clear.
+
+- **stdio, not HTTP — deliberate, not a placeholder.** An MCP server can be
+  a subprocess a client spawns and owns the pipes of (stdio), or a route a
+  running server answers over HTTP. HTTP was seriously considered — it
+  reuses the already-running app process/db connection, needs no per-client
+  command/cwd registration, and normal stdout logging just works — but was
+  rejected because it ties tool availability to shinrin's own web server
+  being open, which defeats a real use case (logging a work session without
+  wanting the study app open at the same time). The cost accepted instead:
+  registration is per-client and slightly fiddly (see below), and there's
+  no auth on the connection — acceptable since stdio's isolation is
+  structural (the client owns the process; nothing else can reach it) and
+  this is a personal, local, single-user tool. Because tool registration
+  (`registerSaveStoryMcpTool(server, db)`) only touches a plain `McpServer`
+  instance and knows nothing about the transport, switching to HTTP later
+  (mounting `createMcpHandler`'s `fetch(request)` as a SvelteKit
+  `+server.ts` route — already a web-standard `Request`→`Response`
+  function, no framework adapter package needed) would only mean rewriting
+  `scripts/mcp-server.ts`'s transport wiring, not the tool logic.
+- **Package: `@modelcontextprotocol/server`, not `@modelcontextprotocol/sdk`.**
+  The SDK recently split from one monolithic package into
+  `@modelcontextprotocol/server` + `@modelcontextprotocol/client` — the
+  `sdk` package name from older tutorials/blog posts is stale.
+- **Tool schemas are valibot, via `@valibot/to-json-schema`, not zod.**
+  `registerTool`'s `inputSchema` needs a `StandardSchemaWithJSON` — both a
+  `~standard.validate` (which plain valibot already provides) _and_ a
+  `~standard.jsonSchema` converter (which it doesn't). Confirmed directly
+  against the installed package's own `.d.mts` files, not blog posts:
+  `@valibot/to-json-schema`'s `toStandardJsonSchema()` bridges the gap, no
+  migration off valibot needed anywhere else in the app.
+- **The `subject` parameter is a dynamically-built enum, not a raw UUID
+  field.** `registerSaveStoryMcpTool` queries `subjects` once at server
+  startup and builds `v.picklist(subjectNames)`, resolving the chosen name
+  back to a `subjectId` inside the handler — an external MCP client has no
+  notion of shinrin's internal ids, and JSON Schema enums can't be
+  recomputed per-call in this SDK's high-level `registerTool` API, only at
+  registration time. Because this process is short-lived (a stdio server is
+  spawned fresh per client session/reconnect, not long-running like the web
+  app), a subject added mid-session simply not yet appearing is an accepted
+  v1 gap, not a bug to fix — the next spawn picks it up.
+- **A separate implementation from the internal `save_story` Tool
+  ([saveStoryTool.ts](src/lib/server/tools/saveStoryTool.ts)), deliberately
+  not shared or merged.** The internal tool's `subjectId` comes from
+  `ToolContext` (the calling agent's own fixed subject); an MCP caller has
+  no such identity and must pick a subject per call — different enough
+  parameter shapes and typing conventions (valibot args here vs. this app's
+  `JsonObjectSchema`/`JsonValue` convention there) that reusing/extending
+  the internal tool wasn't a clean fit. Both tools happen to be named
+  `save_story` — harmless, since they're different processes registered in
+  entirely separate registries (Ollama's tool list vs. this MCP server's),
+  but worth knowing if grepping for the name turns up two hits. `content`
+  is always required here (unlike the internal tool's
+  create-with-no-content-yet case), matching `story_content.content` being
+  `NOT NULL` — this tool exists to hand off real content, not to create an
+  empty placeholder story.
+- **stdout is the JSON-RPC wire for a stdio server — nothing else may
+  write to it, confirmed the hard way twice.** First, `pino`'s own default
+  destination is stdout (see [logger.ts](src/lib/server/logger.ts)), so
+  `mcp-server.ts` builds its own instance pointed at stderr
+  (`pino.destination(2)`) instead of importing the shared `logger` export.
+  Second, and less obvious: `dotenv`'s own `config()` call (inside
+  [loadEnv()](src/lib/server/env.ts)) prints an "injected env" tip to
+  **stdout** by default — this would have corrupted the protocol stream
+  from a dependency neither logging setup accounted for. Only found by
+  actually driving the server over raw stdio JSON-RPC (spawn it, send
+  `initialize`/`tools/list`/`tools/call`, assert every stdout line parses
+  as JSON) rather than trusting the design — fixed with `quiet: true` in
+  `loadEnv()`, which also silences this same noise for
+  `dev.ts`/`seed.ts`/`clean.ts` with no downside there.
+- **Registration is per-MCP-client, not automatic, and desktop-app
+  registration needed the raw config file, not the Connectors UI.** Claude
+  Code: `claude mcp add shinrin -- pnpm --dir <path> mcp:server`. Claude
+  Desktop's "Add custom connector" dialog turned out to be remote-URL-only
+  (HTTPS + optional OAuth fields, no command/args) — local stdio servers
+  there need a hand-edited `mcpServers` entry in
+  `claude_desktop_config.json` instead, same `command`/`args` shape as the
+  CLI. Either way the command must be cwd-independent (`pnpm --dir
+<absolute-path> mcp:server`, not bare `pnpm mcp:server`) since a
+  registered connector has no inherent project directory to run from.
+  Restarting the app (or reconnecting the client) is required to pick up
+  config changes — an already-open session does not retroactively gain a
+  newly registered or renamed tool.
+- **Defaults to dev mode, and that has a real trap worth knowing about.**
+  `mcp-server.ts` calls `loadEnv(currentMode())`
+  ([env.ts](src/lib/server/env.ts)), and with no `NODE_ENV` set (the
+  default for a client-spawned process) that's `'development'` — the dev
+  DB, the same one `DB_WIPE_ON_START` deletes and reseeds on every `pnpm
+dev` start (see "Dev commands" below). For durable real use, the
+  connector's config needs an explicit `"env": { "NODE_ENV": "production"
+}`. Worse than just data loss on a wipe: because a stdio MCP client
+  (Claude Desktop, at least) spawns the server once and keeps the same
+  process alive across an entire session rather than respawning per call, a
+  wipe that happens _while_ that process is already running leaves it
+  holding an open file handle to the now-deleted, unlinked inode — Unix
+  doesn't actually remove a file while a process still has it open, it just
+  unlinks the directory entry. Every subsequent write from that process
+  lands in this orphaned, invisible copy of the database — visible to
+  nothing else, not the running web app, not a fresh
+  `sqlite3`/`better-sqlite3` connection, forever, until that specific
+  process exits. Confirmed by comparing `lsof`'s reported inode for the
+  running `mcp-server.ts` process against `ls -i` on the current on-disk
+  file — they didn't match. The fix in the moment was restarting the MCP
+  client so it opens a fresh handle; the actual lesson is that any
+  long-lived connection sharing the dev DB across a `DB_WIPE_ON_START`
+  restart is fundamentally fragile, one more reason production use should
+  point at the prod DB instead, where nothing ever wipes on start.
+- **No lookup tool for an existing story's id** — same deliberate gap as
+  `update_topic`/`update_mistake` (see "Subjects" above). `create`'s
+  response text includes the new story's id specifically so a
+  same-conversation `update` call has something to use; there's no way to
+  recover it otherwise.
 
 ## Routes
 
@@ -530,11 +653,11 @@ there was no export/import step — just a schema rewrite.
   The in-progress reply streams live via `getStreamingReply` (`query.live`,
   see "Remote functions" below) instead of waiting for the full response.
   Both screens also render a red square icon `Button` (`variant="destructive"
-  size="icon"`) while a run is active, calling `cancelAgent` (see
+size="icon"`) while a run is active, calling `cancelAgent` (see
   Cancellation above for the server-side mechanism). Its `isLoading` state
   is driven by a local `stopping` flag — set the instant the button is
   clicked, cleared in `send()`/`startChat()`'s own `finally` once `runAgent`
-  itself settles, *not* by a `$effect` watching `isSending` (a `$effect`
+  itself settles, _not_ by a `$effect` watching `isSending` (a `$effect`
   version was tried and reverted — using an effect to sync one piece of
   state off another, instead of reacting to something genuinely external,
   is exactly the pattern Svelte's own docs call out as the thing to avoid).
@@ -726,7 +849,7 @@ to release.
   Confirmed by reading the installed `@sveltejs/kit@3.0.0-next.8` source directly (it ships
   from `src/`, not a prebuilt `dist/`): `root.svelte`/`client.js` already call a private
   per-depth `resetters[depth]()` on every client-side navigation (citing
-  sveltejs/kit#15694), trying to auto-clear failed boundaries — a *different*,
+  sveltejs/kit#15694), trying to auto-clear failed boundaries — a _different_,
   already-fixed bug — but that doesn't reach into Svelte's `Boundary` internals to fix
   #16207 above, and `resetters` plus the render tree are module-private to kit's client
   runtime, never exported. There is no supported way to read "a boundary is currently
@@ -755,7 +878,7 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
   value derived from async-loaded data (e.g. the initially-selected tab)
   should be a plain `$state(...)` initializer computed once from the
   resolved value, not an `$effect` that writes state — see
-  [stories/[storyId]/+page.svelte](<src/routes/stories/[storyId]/+page.svelte>)
+  [stories/[storyId]/+page.svelte](src/routes/stories/[storyId]/+page.svelte)
   for the pattern (`let activeSubjectId = $state(story.content[0]?.subjectId ?? '')`
   right after the awaited `$derived`, no effect needed).
 - Component library is **shadcn-svelte** (built on `bits-ui`). Installed
@@ -794,7 +917,7 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
   [delete-session-action.svelte](src/routes/chat/delete-session-action.svelte):
   - The snippet's `props` bag must be spread onto your element for the trigger to actually
     open (it carries the real `onclick`, plus `aria-*`/`id`/ref wiring). But if you also
-    write your own `onclick` *before* `{...props}`, the spread's `onclick` silently wins and
+    write your own `onclick` _before_ `{...props}`, the spread's `onclick` silently wins and
     overwrites yours — attribute order matters, last one wins.
   - `props` is typed `Record<string, unknown>` (bits-ui's `WithChild` type is intentionally
     generic), so `props.onclick` is `unknown` — calling it yourself (e.g. to chain your own
@@ -833,6 +956,11 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
   [drizzle.config.prod.ts](drizzle.config.prod.ts)) — no prod push/seed/clean
   scripts exist on purpose, prod schema changes should go through reviewed
   migration files.
+- `pnpm mcp:server` — runs [scripts/mcp-server.ts](scripts/mcp-server.ts), the
+  MCP stdio server (see "MCP server" above). Not something you run directly
+  day to day — an MCP client (Claude Code, Claude Desktop) spawns this
+  command itself once registered. Defaults to dev mode/dev DB like
+  everything else here unless the client config sets `NODE_ENV=production`.
 - `pnpm check`, `pnpm lint`, `pnpm format`, `pnpm test` (vitest + playwright).
 
 ## Environment

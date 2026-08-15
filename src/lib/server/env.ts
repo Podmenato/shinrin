@@ -9,7 +9,7 @@ import { config } from 'dotenv';
 export type Mode = 'development' | 'production';
 
 export function loadEnv(mode: Mode): void {
-	config({ path: `.env.${mode}`, override: true });
+	config({ path: `.env.${mode}`, override: true, quiet: true });
 }
 
 // Only meaningful for scripts that might run in either environment (seed,
