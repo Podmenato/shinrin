@@ -13,7 +13,7 @@
 
 	const story = $derived(await getStoryById(storyId));
 
-	let activeSubjectId = $state(story.content[0]?.subjectId ?? '');
+	let activeSubjectId = $derived(story.content[0]?.subjectId ?? '');
 </script>
 
 <div class="flex flex-col gap-4 p-2 sm:p-8">
