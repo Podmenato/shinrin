@@ -1,8 +1,8 @@
 // Wraps `vite dev` so the dev DB is always in a known state before the app
 // starts: optionally wipe, then schema-push, then seed. Nothing runs when
 // the dev server stops — the wipe (if enabled) happens on the *next* start,
-// not on Ctrl+C. The dev db is a local sqlite file (see DATABASE_URL in
-// .env.development) — no server process to start beforehand.
+// not on Ctrl+C. The dev db is a local sqlite file (see dbPath() in
+// src/lib/server/env.ts) — no server process to start beforehand.
 import { spawn, spawnSync } from 'node:child_process';
 import { loadEnv } from '$lib/server/env';
 

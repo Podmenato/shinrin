@@ -1,8 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import * as schema from './schema';
 import {
 	agentSubagents,
 	agentTools,
@@ -18,16 +15,11 @@ import {
 	subjects,
 	tools
 } from './schema';
-import { currentMode, loadEnv } from '../env';
+import { createDb } from './createDb';
+import { currentMode, dbPath } from '../env';
 
-// Runs standalone (tsx, not Vite) — nothing has populated process.env for
-// us, so we have to load the right .env.[mode] file ourselves before
-// reading DATABASE_URL below.
-loadEnv(currentMode());
-
-mkdirSync(dirname(process.env.DATABASE_URL!), { recursive: true });
-const client = new Database(process.env.DATABASE_URL!);
-const db = drizzle(client, { schema });
+const path = dbPath(currentMode());
+const db = createDb(path);
 
 const MEMORY_RULES =
 	'You have three separate ways to remember things across sessions — use the right one:\n' +
@@ -383,7 +375,7 @@ const STORY_SEEDS: {
 	}
 ];
 
-const seedFilesDir = join(dirname(process.env.DATABASE_URL!), 'files');
+const seedFilesDir = join(dirname(path), 'files');
 mkdirSync(seedFilesDir, { recursive: true });
 
 await db.delete(storyResources);
@@ -511,4 +503,4 @@ for (const [agentName, sessionSeeds] of Object.entries(SESSION_SEEDS)) {
 console.log(
 	'Seeded agents, tools, subjects, agent_tools, agent_subagents, mistake_observations, study_topics, stories, story_content, files, story_resources, sessions and messages.'
 );
-client.close();
+db.$client.close();

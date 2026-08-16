@@ -18,3 +18,12 @@ export function loadEnv(mode: Mode): void {
 export function currentMode(): Mode {
 	return process.env.NODE_ENV === 'production' ? 'production' : 'development';
 }
+
+// The db is just a file in a folder, not a real connection string — dev and
+// prod never run from the same folder, so a literal per-mode path here loses
+// nothing an env var would have bought (this used to be DATABASE_URL, a
+// leftover from when the db was Postgres and the "connection string" part
+// was actually the configurable bit).
+export function dbPath(mode: Mode): string {
+	return mode === 'production' ? '.data/prod.sqlite3' : '.data/dev.sqlite3';
+}
