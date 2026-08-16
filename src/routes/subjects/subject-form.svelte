@@ -64,7 +64,11 @@
 			</Field.Field>
 
 			<div class="flex items-center justify-end gap-2">
-				<Button type="submit" disabled={subjectForm.pending > 0} isLoading={subjectForm.pending > 0}>
+				<Button
+					type="submit"
+					disabled={subjectForm.pending > 0}
+					isLoading={subjectForm.pending > 0}
+				>
 					{subject ? 'Save' : 'Create'}
 				</Button>
 			</div>

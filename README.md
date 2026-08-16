@@ -9,7 +9,7 @@ It's a from-scratch alternative to generic chatbot-based studying — instead
 of a stateless chat window, the agent has tools to read and write durable
 per-subject state (topics you're working on, mistakes you keep making) across
 sessions, plus direct access to your real Anki collection instead of just
-talking *about* flashcards.
+talking _about_ flashcards.
 
 It's also a personal project for learning how to build agentic systems
 end-to-end — the architecture choices (tool registry, subagents, contextual

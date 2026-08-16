@@ -62,8 +62,8 @@ export const FIND_PROPERTIES: Record<string, JsonSchemaArgument> = {
 export const FIND_DESCRIPTION =
 	'Common requests — use exactly these, they are not interchangeable:\n' +
 	"  All due cards        → states:['due']            (scheduled for review now; may include cards never touched today)\n" +
-	"  Failed today         → rated_days:1, rated_ease:1 (actually reviewed and marked Again today)\n" +
-	"  Failed in last N days→ rated_days:N, rated_ease:1\n" +
+	'  Failed today         → rated_days:1, rated_ease:1 (actually reviewed and marked Again today)\n' +
+	'  Failed in last N days→ rated_days:N, rated_ease:1\n' +
 	"  New cards today      → added:1, states:['new']    (first added to Anki today, never reviewed)\n" +
 	"  is:due is NEVER a substitute for 'failed' — a card can be due without ever having been reviewed, and a card failed today may or may not still be due depending on when it was last reviewed.\n" +
 	'\n' +

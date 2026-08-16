@@ -40,7 +40,9 @@
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>Content</Card.Title>
-			<Card.Description>One variant per subject it has been saved or translated into.</Card.Description>
+			<Card.Description
+				>One variant per subject it has been saved or translated into.</Card.Description
+			>
 		</Card.Header>
 		<Card.Content>
 			{#if story.content.length === 0}
