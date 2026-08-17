@@ -85,9 +85,12 @@ export const sessions = sqliteTable('sessions', {
 	model: text().notNull(),
 	systemPrompt: text('system_prompt'),
 	summary: text('summary'),
-	parentSessionId: text('parent_session_id').references((): AnySQLiteColumn => sessions.id),
+	parentSessionId: text('parent_session_id').references((): AnySQLiteColumn => sessions.id, {
+		onDelete: 'cascade'
+	}),
 	summarizedThroughMessageId: text('summarized_through_message_id').references(
-		(): AnySQLiteColumn => messages.id
+		(): AnySQLiteColumn => messages.id,
+		{ onDelete: 'set null' }
 	),
 	createdAt: createdAt(),
 	updatedAt: updatedAt()
@@ -97,7 +100,7 @@ export const messages = sqliteTable('messages', {
 	id: generateUUID(),
 	sessionId: text('session_id')
 		.notNull()
-		.references(() => sessions.id),
+		.references(() => sessions.id, { onDelete: 'cascade' }),
 	role: text('role').notNull(),
 	content: text('content').notNull(),
 	toolName: text('tool_name'),
@@ -108,7 +111,7 @@ export const messageToolCalls = sqliteTable('message_tool_calls', {
 	id: generateUUID(),
 	messageId: text('message_id')
 		.notNull()
-		.references(() => messages.id),
+		.references(() => messages.id, { onDelete: 'cascade' }),
 	toolId: text('tool_id')
 		.notNull()
 		.references(() => tools.id),
