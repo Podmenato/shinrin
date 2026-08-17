@@ -1,12 +1,9 @@
 import * as v from 'valibot';
 import { toStandardJsonSchema } from '@valibot/to-json-schema';
 import { McpServer } from '@modelcontextprotocol/server';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
 import { stories, storyContent, subjects } from '../../db/schema';
-import * as schema from '../../db/schema';
-
-type Db = ReturnType<typeof drizzle<typeof schema>>;
+import type { Db } from '../../db/createDb';
 
 export async function registerSaveStoryMcpTool(server: McpServer, db: Db) {
 	const subjectRows = await db.select().from(subjects);

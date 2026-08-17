@@ -14,7 +14,7 @@ export type Subject = InferSelectModel<typeof subjects>;
 
 /** Returns a single subject by id. */
 export const getSubjectById = query(v.pipe(v.string(), v.uuid()), async (id) => {
-	const subject = await db.query.subjects.findFirst({ where: eq(subjects.id, id) });
+	const subject = await db.query.subjects.findFirst({ where: { id } });
 	if (!subject) {
 		error(404, 'Subject not found');
 	}

@@ -1,6 +1,4 @@
-import { eq } from 'drizzle-orm';
 import { db } from '../db/index';
-import { agentSubagents } from '../db/schema';
 import type { Tool } from './tool';
 import { SubagentTool } from './subagentTool';
 import { CurrentTimeTool } from './currentTimeTool';
@@ -86,7 +84,7 @@ export async function getSubagentTools(
 	parentSessionId: string
 ): Promise<Tool[]> {
 	const rows = await db.query.agentSubagents.findMany({
-		where: eq(agentSubagents.agentId, agentId),
+		where: { agentId },
 		with: { subagent: true }
 	});
 

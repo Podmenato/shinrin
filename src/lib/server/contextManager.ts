@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from './db/index';
 import {
 	messageToolCalls,
@@ -78,22 +78,23 @@ export class ContextManager {
 
 	async load(): Promise<void> {
 		const session = await db.query.sessions.findFirst({
-			where: eq(sessionsTable.id, this.sessionId)
+			where: { id: this.sessionId }
 		});
 		this.summary = session?.summary ?? null;
 		this.summarizedThroughMessageId = session?.summarizedThroughMessageId ?? null;
 
+		const cutoffMessage = this.summarizedThroughMessageId
+			? await db.query.messages.findFirst({
+					where: { id: this.summarizedThroughMessageId },
+					columns: { createdAt: true }
+				})
+			: undefined;
+
 		const dbMessages = await db.query.messages.findMany({
-			where: this.summarizedThroughMessageId
-				? and(
-						eq(messagesTable.sessionId, this.sessionId),
-						gt(
-							messagesTable.createdAt,
-							sql`(select created_at from messages where id = ${this.summarizedThroughMessageId})`
-						)
-					)
-				: eq(messagesTable.sessionId, this.sessionId),
-			orderBy: asc(messagesTable.createdAt),
+			where: cutoffMessage
+				? { sessionId: this.sessionId, createdAt: { gt: cutoffMessage.createdAt } }
+				: { sessionId: this.sessionId },
+			orderBy: { createdAt: 'asc' },
 			with: { messageToolCalls: { with: { tool: true } } }
 		});
 
@@ -117,8 +118,8 @@ export class ContextManager {
 		}
 
 		const cutoff = await db.query.messages.findFirst({
-			where: eq(messagesTable.sessionId, this.sessionId),
-			orderBy: desc(messagesTable.createdAt)
+			where: { sessionId: this.sessionId },
+			orderBy: { createdAt: 'desc' }
 		});
 
 		if (cutoff === undefined) {

@@ -4,8 +4,7 @@ import type { Tool } from './tools/tool';
 import { ToolError } from './tools/tool';
 import { logger } from './logger';
 import { db } from './db/index';
-import { eq } from 'drizzle-orm';
-import { agents, sessions } from './db/schema';
+import { sessions } from './db/schema';
 import { getTools, getSubagentTools } from './tools/toolRegistry';
 import { extractUserUrls } from './tools/fetchUrlTool';
 
@@ -33,7 +32,7 @@ export class Agent {
 		parentSessionId?: string
 	): Promise<Agent> {
 		const agent = await db.query.agents.findFirst({
-			where: eq(agents.id, agentId),
+			where: { id: agentId },
 			with: { agentTools: { with: { tool: true } } }
 		});
 
@@ -70,7 +69,7 @@ export class Agent {
 		prompt: string
 	): Promise<Agent> {
 		const session = await db.query.sessions.findFirst({
-			where: eq(sessions.id, sessionId),
+			where: { id: sessionId },
 			with: { agent: { with: { agentTools: { with: { tool: true } } } } }
 		});
 

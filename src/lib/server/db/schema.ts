@@ -1,4 +1,4 @@
-import { relations } from 'drizzle-orm';
+import { defineRelations } from 'drizzle-orm';
 import {
 	type AnySQLiteColumn,
 	integer,
@@ -202,85 +202,112 @@ export const storyResources = sqliteTable('story_resources', {
 	createdAt: createdAt()
 });
 
-export const subjectsRelations = relations(subjects, ({ many }) => ({
-	agents: many(agents),
-	studyTopics: many(studyTopics),
-	mistakeObservations: many(mistakeObservations),
-	storyContent: many(storyContent)
-}));
+// RQBv1's `relations()` was replaced by RQBv2's `defineRelations()` in drizzle-orm v1 — every
+// relation now states its own `from`/`to` explicitly, which is also why the old `relationName`
+// disambiguation on agentSubagents' two agents-pointing FKs (agentId vs subagentId) is no longer
+// needed: each relation's own `to` already says which column it's through.
+// `r.one.X(...)` defaults to `optional: true` regardless of the underlying FK's own nullability
+// (unlike v1, which inferred it from the FK column) — every one() below sets `optional: false`
+// except agents.subject, since agents.subjectId is the only genuinely-nullable FK in this schema.
+const schemaTables = {
+	subjects,
+	agents,
+	tools,
+	agentTools,
+	agentSubagents,
+	sessions,
+	messages,
+	messageToolCalls,
+	memories,
+	studyTopics,
+	mistakeObservations,
+	stories,
+	storyContent,
+	files,
+	storyResources
+};
 
-export const agentsRelations = relations(agents, ({ one, many }) => ({
-	subject: one(subjects, { fields: [agents.subjectId], references: [subjects.id] }),
-	agentTools: many(agentTools),
-	sessions: many(sessions),
-	subagents: many(agentSubagents, { relationName: 'parent' }),
-	subagentOf: many(agentSubagents, { relationName: 'child' })
-}));
-
-export const toolsRelations = relations(tools, ({ many }) => ({
-	agentTools: many(agentTools)
-}));
-
-export const agentToolsRelations = relations(agentTools, ({ one }) => ({
-	agent: one(agents, { fields: [agentTools.agentId], references: [agents.id] }),
-	tool: one(tools, { fields: [agentTools.toolId], references: [tools.id] })
-}));
-
-export const agentSubagentsRelations = relations(agentSubagents, ({ one }) => ({
-	agent: one(agents, {
-		fields: [agentSubagents.agentId],
-		references: [agents.id],
-		relationName: 'parent'
-	}),
-	subagent: one(agents, {
-		fields: [agentSubagents.subagentId],
-		references: [agents.id],
-		relationName: 'child'
-	})
-}));
-
-export const sessionsRelations = relations(sessions, ({ one, many }) => ({
-	agent: one(agents, { fields: [sessions.agentId], references: [agents.id] }),
-	messages: many(messages)
-}));
-
-export const messagesRelations = relations(messages, ({ one, many }) => ({
-	session: one(sessions, { fields: [messages.sessionId], references: [sessions.id] }),
-	messageToolCalls: many(messageToolCalls)
-}));
-
-export const messageToolCallsRelations = relations(messageToolCalls, ({ one }) => ({
-	message: one(messages, { fields: [messageToolCalls.messageId], references: [messages.id] }),
-	tool: one(tools, { fields: [messageToolCalls.toolId], references: [tools.id] })
-}));
-
-export const memoriesRelations = relations(memories, ({ one }) => ({
-	agent: one(agents, { fields: [memories.agentId], references: [agents.id] })
-}));
-
-export const studyTopicsRelations = relations(studyTopics, ({ one }) => ({
-	subject: one(subjects, { fields: [studyTopics.subjectId], references: [subjects.id] })
-}));
-
-export const mistakeObservationsRelations = relations(mistakeObservations, ({ one }) => ({
-	subject: one(subjects, { fields: [mistakeObservations.subjectId], references: [subjects.id] })
-}));
-
-export const storiesRelations = relations(stories, ({ many }) => ({
-	content: many(storyContent),
-	resources: many(storyResources)
-}));
-
-export const storyContentRelations = relations(storyContent, ({ one }) => ({
-	story: one(stories, { fields: [storyContent.storyId], references: [stories.id] }),
-	subject: one(subjects, { fields: [storyContent.subjectId], references: [subjects.id] })
-}));
-
-export const filesRelations = relations(files, ({ many }) => ({
-	storyResources: many(storyResources)
-}));
-
-export const storyResourcesRelations = relations(storyResources, ({ one }) => ({
-	story: one(stories, { fields: [storyResources.storyId], references: [stories.id] }),
-	file: one(files, { fields: [storyResources.fileId], references: [files.id] })
+export const relations = defineRelations(schemaTables, (r) => ({
+	subjects: {
+		agents: r.many.agents({ from: r.subjects.id, to: r.agents.subjectId }),
+		studyTopics: r.many.studyTopics({ from: r.subjects.id, to: r.studyTopics.subjectId }),
+		mistakeObservations: r.many.mistakeObservations({
+			from: r.subjects.id,
+			to: r.mistakeObservations.subjectId
+		}),
+		storyContent: r.many.storyContent({ from: r.subjects.id, to: r.storyContent.subjectId })
+	},
+	agents: {
+		subject: r.one.subjects({ from: r.agents.subjectId, to: r.subjects.id }),
+		agentTools: r.many.agentTools({ from: r.agents.id, to: r.agentTools.agentId }),
+		sessions: r.many.sessions({ from: r.agents.id, to: r.sessions.agentId }),
+		subagents: r.many.agentSubagents({ from: r.agents.id, to: r.agentSubagents.agentId }),
+		subagentOf: r.many.agentSubagents({ from: r.agents.id, to: r.agentSubagents.subagentId })
+	},
+	tools: {
+		agentTools: r.many.agentTools({ from: r.tools.id, to: r.agentTools.toolId })
+	},
+	agentTools: {
+		agent: r.one.agents({ from: r.agentTools.agentId, to: r.agents.id, optional: false }),
+		tool: r.one.tools({ from: r.agentTools.toolId, to: r.tools.id, optional: false })
+	},
+	agentSubagents: {
+		agent: r.one.agents({ from: r.agentSubagents.agentId, to: r.agents.id, optional: false }),
+		subagent: r.one.agents({
+			from: r.agentSubagents.subagentId,
+			to: r.agents.id,
+			optional: false
+		})
+	},
+	sessions: {
+		agent: r.one.agents({ from: r.sessions.agentId, to: r.agents.id, optional: false }),
+		messages: r.many.messages({ from: r.sessions.id, to: r.messages.sessionId })
+	},
+	messages: {
+		session: r.one.sessions({ from: r.messages.sessionId, to: r.sessions.id, optional: false }),
+		messageToolCalls: r.many.messageToolCalls({
+			from: r.messages.id,
+			to: r.messageToolCalls.messageId
+		})
+	},
+	messageToolCalls: {
+		message: r.one.messages({
+			from: r.messageToolCalls.messageId,
+			to: r.messages.id,
+			optional: false
+		}),
+		tool: r.one.tools({ from: r.messageToolCalls.toolId, to: r.tools.id, optional: false })
+	},
+	memories: {
+		agent: r.one.agents({ from: r.memories.agentId, to: r.agents.id, optional: false })
+	},
+	studyTopics: {
+		subject: r.one.subjects({ from: r.studyTopics.subjectId, to: r.subjects.id, optional: false })
+	},
+	mistakeObservations: {
+		subject: r.one.subjects({
+			from: r.mistakeObservations.subjectId,
+			to: r.subjects.id,
+			optional: false
+		})
+	},
+	stories: {
+		content: r.many.storyContent({ from: r.stories.id, to: r.storyContent.storyId }),
+		resources: r.many.storyResources({ from: r.stories.id, to: r.storyResources.storyId })
+	},
+	storyContent: {
+		story: r.one.stories({ from: r.storyContent.storyId, to: r.stories.id, optional: false }),
+		subject: r.one.subjects({
+			from: r.storyContent.subjectId,
+			to: r.subjects.id,
+			optional: false
+		})
+	},
+	files: {
+		storyResources: r.many.storyResources({ from: r.files.id, to: r.storyResources.fileId })
+	},
+	storyResources: {
+		story: r.one.stories({ from: r.storyResources.storyId, to: r.stories.id, optional: false }),
+		file: r.one.files({ from: r.storyResources.fileId, to: r.files.id, optional: false })
+	}
 }));

@@ -35,6 +35,7 @@
 		"tests/**/*.svelte",
 		"drizzle.config.ts",
 		"drizzle.config.prod.ts",
+		"drizzle.config.test.ts",
 		"scripts/**/*.ts"
 	]
 	// Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias

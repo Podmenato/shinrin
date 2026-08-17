@@ -1,8 +1,6 @@
 import { command, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { db } from '#lib/server/db/index.js';
-import { messages, sessions } from '#lib/server/db/schema.js';
-import { asc, eq } from 'drizzle-orm';
 import { Agent } from '#lib/server/agent.js';
 import { OllamaProvider } from '#lib/server/modelProviders/ollamaProvider.js';
 import { sessionRegistry } from '#lib/server/sessionRegistry.js';
@@ -12,7 +10,7 @@ import * as v from 'valibot';
 /** Returns a session along with its agent, for display in the chat screen header. */
 export const getSession = query(v.pipe(v.string(), v.uuid()), async (sessionId) => {
 	const session = await db.query.sessions.findFirst({
-		where: eq(sessions.id, sessionId),
+		where: { id: sessionId },
 		with: { agent: true }
 	});
 	if (!session) {
@@ -36,8 +34,8 @@ export const getSession = query(v.pipe(v.string(), v.uuid()), async (sessionId) 
  */
 export const getSessionMessages = query(v.pipe(v.string(), v.uuid()), async (sessionId) => {
 	const rows = await db.query.messages.findMany({
-		where: eq(messages.sessionId, sessionId),
-		orderBy: asc(messages.createdAt),
+		where: { sessionId },
+		orderBy: { createdAt: 'asc' },
 		with: { messageToolCalls: { with: { tool: true } } }
 	});
 
@@ -68,7 +66,7 @@ export const getStreamingReply = query.live(v.pipe(v.string(), v.uuid()), (sessi
 
 /** Runs the agent for the given session with the provided prompt. */
 export const runAgent = command(runSchema, async ({ sessionId, prompt }) => {
-	const session = await db.query.sessions.findFirst({ where: eq(sessions.id, sessionId) });
+	const session = await db.query.sessions.findFirst({ where: { id: sessionId } });
 	if (!session) {
 		error(404, 'Session not found');
 	}
