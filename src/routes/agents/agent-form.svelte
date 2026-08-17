@@ -1,21 +1,21 @@
 <script lang="ts">
-	import { saveAgent, getAssignableSubagents, type Agent } from '$lib/agents.remote';
-	import { getTools } from '$lib/tools.remote';
-	import { getSubjects } from '$lib/subjects.remote';
-	import { getAvailableModels } from '$lib/ollamaAdmin.remote';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import * as Field from '$lib/components/ui/field/index.js';
-	import * as Select from '$lib/components/ui/select/index.js';
-	import * as Collapsible from '$lib/components/ui/collapsible/index.js';
-	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
-	import { Textarea } from '$lib/components/ui/textarea/index.js';
-	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
+	import { saveAgent, getAssignableSubagents, type Agent } from '#lib/agents.remote.js';
+	import { getTools } from '#lib/tools.remote.js';
+	import { getSubjects } from '#lib/subjects.remote.js';
+	import { getAvailableModels } from '#lib/ollamaAdmin.remote.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import { toast } from 'svelte-sonner';
 	import DeleteAgentAction from './[agentId]/delete-agent-action.svelte';
-	import { formatDateTime } from '$lib/date';
+	import { formatDateTime } from '#lib/date.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { isHttpError } from '@sveltejs/kit';
@@ -60,7 +60,7 @@
 						toast.success('Agent saved');
 					} else {
 						toast.success('Agent created');
-						await goto(resolve(`/agents/${form.result?.id}`));
+						await goto(resolve('/agents/[agentId]', { agentId: form.result?.id ?? '' }));
 					}
 				} else {
 					toast.error('Saving failed');

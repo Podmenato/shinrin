@@ -1,7 +1,7 @@
 <script lang="ts">
-	import Markdown from '$lib/markdown/Markdown.svelte';
+	import Markdown from '#lib/markdown/Markdown.svelte';
 	import Quiz from './quiz.svelte';
-	import type { Message } from '$lib/server/contextManager';
+	import type { Message } from '#lib/server/contextManager.js';
 
 	const { message }: { message: Message } = $props();
 </script>

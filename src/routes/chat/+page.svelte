@@ -1,21 +1,21 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { getAgents, getAllSessions, createSession } from '$lib/agents.remote';
-	import { getAvailableModels } from '$lib/ollamaAdmin.remote';
-	import { runAgent, cancelAgent } from '$lib/sessions.remote';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import * as Field from '$lib/components/ui/field/index.js';
-	import * as Select from '$lib/components/ui/select/index.js';
-	import { Textarea } from '$lib/components/ui/textarea/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
+	import { getAgents, getAllSessions, createSession } from '#lib/agents.remote.js';
+	import { getAvailableModels } from '#lib/ollamaAdmin.remote.js';
+	import { runAgent, cancelAgent } from '#lib/sessions.remote.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import DataTable, {
 		renderComponent,
 		type DataTableColumn
-	} from '$lib/components/data-table/data-table.svelte';
+	} from '#lib/components/data-table/data-table.svelte';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import SquareIcon from '@lucide/svelte/icons/square';
-	import { formatDateTime } from '$lib/date';
+	import { formatDateTime } from '#lib/date.js';
 	import { toast } from 'svelte-sonner';
 	import DeleteSessionAction from './delete-session-action.svelte';
 
@@ -47,7 +47,7 @@
 			runningSessionId = null;
 			stopping = false;
 		}
-		await goto(resolve(`/chat/${session.id}`));
+		await goto(resolve('/chat/[sessionId]', { sessionId: session.id }));
 	}
 
 	async function cancel() {
@@ -182,7 +182,7 @@
 				Icon={MessageSquareIcon}
 				emptyTitle="No sessions yet"
 				emptyDesc="Start a chat above to create your first session."
-				onRowClick={(session) => goto(resolve(`/chat/${session.id}`))}
+				onRowClick={(session) => goto(resolve('/chat/[sessionId]', { sessionId: session.id }))}
 			/>
 		</Card.Content>
 	</Card.Root>

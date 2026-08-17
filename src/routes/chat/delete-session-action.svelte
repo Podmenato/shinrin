@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { deleteSession } from '$lib/agents.remote';
-	import * as AlertDialog from '$lib/components/ui/alert-dialog/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import { Spinner } from '$lib/components/ui/spinner/index.js';
+	import { deleteSession } from '#lib/agents.remote.js';
+	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import Trash2Icon from '@lucide/svelte/icons/trash-2';
 
 	let { sessionId }: { sessionId: string } = $props();

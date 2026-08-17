@@ -1,12 +1,12 @@
 import { command, query } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
-import { messages, sessions } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { messages, sessions } from '#lib/server/db/schema.js';
 import { asc, eq } from 'drizzle-orm';
-import { Agent } from '$lib/server/agent';
-import { OllamaProvider } from '$lib/server/modelProviders/ollamaProvider';
-import { sessionRegistry } from '$lib/server/sessionRegistry';
-import type { JsonValue } from '$lib/json';
+import { Agent } from '#lib/server/agent.js';
+import { OllamaProvider } from '#lib/server/modelProviders/ollamaProvider.js';
+import { sessionRegistry } from '#lib/server/sessionRegistry.js';
+import type { JsonValue } from '#lib/json.js';
 import * as v from 'valibot';
 
 /** Returns a session along with its agent, for display in the chat screen header. */

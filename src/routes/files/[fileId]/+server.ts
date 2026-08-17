@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { readFileSync } from 'node:fs';
-import { db } from '$lib/server/db';
-import { files } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { files } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 

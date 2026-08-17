@@ -1,6 +1,6 @@
 <script lang="ts">
-	import * as Table from '$lib/components/ui/table';
-	import { Skeleton } from '$lib/components/ui/skeleton';
+	import * as Table from '#lib/components/ui/table/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 
 	let { rows }: { rows: number } = $props();
 </script>

@@ -6,6 +6,10 @@
 	"engines": {
 		"node": ">=26 <27"
 	},
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	},
 	"scripts": {
 		"dev": "tsx scripts/dev.ts",
 		"dev-debug": "LOG_LEVEL=debug tsx scripts/dev.ts",
@@ -52,8 +56,8 @@
 		"@internationalized/date": "^3.12.2",
 		"@lucide/svelte": "^1.31.0",
 		"@playwright/test": "^1.60.0",
-		"@sveltejs/adapter-node": "6.0.0-next.3",
-		"@sveltejs/kit": "3.0.0-next.8",
+		"@sveltejs/adapter-node": "6.0.0-next.10",
+		"@sveltejs/kit": "3.0.0-next.23",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@tailwindcss/forms": "^0.5.11",
 		"@tailwindcss/typography": "^0.5.19",

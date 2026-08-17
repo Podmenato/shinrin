@@ -1,7 +1,7 @@
 import { query } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
-import { subjects, studyTopics } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { subjects, studyTopics } from '#lib/server/db/schema.js';
 import { desc, eq, getTableColumns, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
 

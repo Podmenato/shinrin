@@ -18,7 +18,7 @@
 </script>
 
 <script lang="ts" generics="T">
-	import * as Table from '$lib/components/ui/table';
+	import * as Table from '#lib/components/ui/table/index.js';
 	import EmptyTable from './empty-table.svelte';
 	import TableSkeletonBody from './table-skeleton-body.svelte';
 	import TableHeader from './table-header.svelte';

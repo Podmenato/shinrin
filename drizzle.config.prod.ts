@@ -1,5 +1,5 @@
 import { defineConfig } from 'drizzle-kit';
-import { dbPath } from '$lib/server/env';
+import { dbPath } from '#lib/server/env.js';
 
 // Prod counterpart of drizzle.config.ts — used via `--config
 // drizzle.config.prod.ts` for db:prod:generate/migrate/studio. Deliberately

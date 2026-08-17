@@ -7,7 +7,7 @@ import {
 	tools as toolsTable
 } from './db/schema';
 import type { ModelProvider } from './modelProviders/modelProvider';
-import type { JsonValue } from '$lib/json';
+import type { JsonValue } from '#lib/json.js';
 
 export type ToolCall = {
 	name: string;

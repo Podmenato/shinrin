@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { getAllStories, type Story } from '$lib/stories.remote';
-	import DataTable, { type DataTableColumn } from '$lib/components/data-table/data-table.svelte';
+	import { getAllStories, type Story } from '#lib/stories.remote.js';
+	import DataTable, { type DataTableColumn } from '#lib/components/data-table/data-table.svelte';
 	import BookMarkedIcon from '@lucide/svelte/icons/book-marked';
-	import { formatDateTime } from '$lib/date';
+	import { formatDateTime } from '#lib/date.js';
 
 	const stories = getAllStories();
 
 	function openStory(story: Story) {
-		goto(resolve(`/stories/${story.id}`));
+		goto(resolve('/stories/[storyId]', { storyId: story.id }));
 	}
 
 	const columns: DataTableColumn<Story>[] = [

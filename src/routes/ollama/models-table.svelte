@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { getModels, type OllamaModel, stopRunningModel } from '$lib/ollamaAdmin.remote';
+	import { getModels, type OllamaModel, stopRunningModel } from '#lib/ollamaAdmin.remote.js';
 	import DataTable, {
 		renderComponent,
 		type DataTableColumn
-	} from '$lib/components/data-table/data-table.svelte';
+	} from '#lib/components/data-table/data-table.svelte';
 	import ModelStateBadge from './model-state-badge.svelte';
 	import ModelActionsCell from './model-actions-cell.svelte';
 	import ServerIcon from '@lucide/svelte/icons/server';

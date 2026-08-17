@@ -6,13 +6,13 @@
 		getStreamingReply,
 		runAgent,
 		cancelAgent
-	} from '$lib/sessions.remote';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
-	import { Textarea } from '$lib/components/ui/textarea/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import { Spinner } from '$lib/components/ui/spinner/index.js';
+	} from '#lib/sessions.remote.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import SquareIcon from '@lucide/svelte/icons/square';
 	import ChatMessage from './chat-message.svelte';

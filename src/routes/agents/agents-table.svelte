@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { getAgents, type Agent } from '$lib/agents.remote';
-	import DataTable, { type DataTableColumn } from '$lib/components/data-table/data-table.svelte';
+	import { getAgents, type Agent } from '#lib/agents.remote.js';
+	import DataTable, { type DataTableColumn } from '#lib/components/data-table/data-table.svelte';
 	import BotIcon from '@lucide/svelte/icons/bot';
 	import { resolve } from '$app/paths';
-	import { formatDate } from '$lib/date';
+	import { formatDate } from '#lib/date.js';
 
 	const agents = getAgents();
 
 	function openAgent(agent: Agent) {
-		goto(resolve(`/agents/${agent.id}`));
+		goto(resolve('/agents/[agentId]', { agentId: agent.id }));
 	}
 
 	const columns: DataTableColumn<Agent>[] = [

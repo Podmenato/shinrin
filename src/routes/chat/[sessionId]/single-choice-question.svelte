@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { RadioGroup, RadioGroupItem } from '$lib/components/ui/radio-group';
-	import * as Field from '$lib/components/ui/field';
-	import { cn } from '$lib/utils';
-	import type { SingleChoiceQuestion } from '$lib/quiz';
+	import { RadioGroup, RadioGroupItem } from '#lib/components/ui/radio-group/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import { cn } from '#lib/utils.js';
+	import type { SingleChoiceQuestion } from '#lib/quiz.js';
 
 	const {
 		question,

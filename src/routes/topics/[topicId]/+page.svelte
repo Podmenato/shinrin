@@ -1,19 +1,19 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { getTopicById, type Topic } from '$lib/topics.remote';
-	import { createSession, getAgentsForSubject } from '$lib/agents.remote';
-	import { runAgent } from '$lib/sessions.remote';
-	import { getAvailableModels } from '$lib/ollamaAdmin.remote';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import * as Field from '$lib/components/ui/field/index.js';
-	import * as Select from '$lib/components/ui/select/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
+	import { getTopicById, type Topic } from '#lib/topics.remote.js';
+	import { createSession, getAgentsForSubject } from '#lib/agents.remote.js';
+	import { runAgent } from '#lib/sessions.remote.js';
+	import { getAvailableModels } from '#lib/ollamaAdmin.remote.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import TopicStatusBadge from '../topic-status-badge.svelte';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import GraduationCapIcon from '@lucide/svelte/icons/graduation-cap';
-	import { formatDateTime } from '$lib/date';
+	import { formatDateTime } from '#lib/date.js';
 	import { toast } from 'svelte-sonner';
 
 	let { params }: { params: { topicId: string } } = $props();
@@ -63,7 +63,7 @@
 
 			await runAgent({ sessionId: session.id, prompt: `Let's study "${topic.topic}".` });
 
-			await goto(resolve(`/chat/${session.id}`));
+			await goto(resolve('/chat/[sessionId]', { sessionId: session.id }));
 		} catch {
 			toast.error('Failed to start studying');
 		}

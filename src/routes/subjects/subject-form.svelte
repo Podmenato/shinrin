@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { saveSubject, type Subject } from '$lib/subjects.remote';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import * as Field from '$lib/components/ui/field/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
-	import { Textarea } from '$lib/components/ui/textarea/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
+	import { saveSubject, type Subject } from '#lib/subjects.remote.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { toast } from 'svelte-sonner';
-	import { formatDateTime } from '$lib/date';
+	import { formatDateTime } from '#lib/date.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 
@@ -21,7 +21,7 @@
 					toast.success('Subject saved');
 				} else {
 					toast.success('Subject created');
-					await goto(resolve(`/subjects/${form.result?.id}`));
+					await goto(resolve('/subjects/[subjectId]', { subjectId: form.result?.id ?? '' }));
 				}
 			} else {
 				toast.error('Saving failed');

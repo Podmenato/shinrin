@@ -2,7 +2,9 @@ import type { ModelProvider, ModelResponse } from './modelProvider';
 import type { Message } from '../contextManager';
 import type { Tool } from '../tools/tool';
 
-export type FakeResponder = ModelResponse[] | ((call: number, messages: Message[]) => ModelResponse);
+export type FakeResponder =
+	| ModelResponse[]
+	| ((call: number, messages: Message[]) => ModelResponse);
 
 /** A scripted ModelProvider for testing the Agent loop without a real Ollama daemon. */
 export class FakeModelProvider implements ModelProvider {
@@ -23,7 +25,9 @@ export class FakeModelProvider implements ModelProvider {
 			throw new DOMException('Aborted', 'AbortError');
 		}
 
-		const response = Array.isArray(this.responder) ? this.responder[call] : this.responder(call, messages);
+		const response = Array.isArray(this.responder)
+			? this.responder[call]
+			: this.responder(call, messages);
 		if (!response) {
 			throw new Error(`FakeModelProvider: no response configured for call #${call}`);
 		}

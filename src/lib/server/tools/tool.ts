@@ -1,4 +1,4 @@
-import type { JsonValue, JsonObjectSchema } from '$lib/json';
+import type { JsonValue, JsonObjectSchema } from '#lib/json.js';
 
 export type ToolDefinition = {
 	name: string;

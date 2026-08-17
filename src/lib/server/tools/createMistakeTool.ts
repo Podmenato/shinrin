@@ -2,7 +2,7 @@ import type { Tool, ToolDefinition } from './tool';
 import { ToolError } from './tool';
 import { db } from '../db/index';
 import { mistakeObservations } from '../db/schema';
-import { toJsonObjectSchema, type JsonValue } from '$lib/json';
+import { toJsonObjectSchema, type JsonValue } from '#lib/json.js';
 
 export class CreateMistakeTool implements Tool {
 	definition: ToolDefinition;

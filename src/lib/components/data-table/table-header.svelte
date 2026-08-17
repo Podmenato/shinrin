@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as Table from '$lib/components/ui/table';
+	import * as Table from '#lib/components/ui/table/index.js';
 
 	type Column = { width?: string; name: string };
 

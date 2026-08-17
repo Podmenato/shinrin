@@ -7,7 +7,7 @@ import { db } from './db/index';
 import { agents, sessions, tools as toolsTable, messages, messageToolCalls } from './db/schema';
 import type { Tool } from './tools/tool';
 import { ToolError } from './tools/tool';
-import { toJsonObjectSchema } from '$lib/json';
+import { toJsonObjectSchema } from '#lib/json.js';
 
 async function seedSession() {
 	const [agent] = await db.insert(agents).values({ name: 'agent' }).returning();

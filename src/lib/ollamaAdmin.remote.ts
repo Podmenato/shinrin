@@ -1,7 +1,7 @@
 import { query, command } from '$app/server';
 import * as v from 'valibot';
-import { logger } from '$lib/server/logger';
-import { listModels, stopModel, type OllamaModel } from '$lib/server/ollamaAdmin';
+import { logger } from '#lib/server/logger.js';
+import { listModels, stopModel, type OllamaModel } from '#lib/server/ollamaAdmin.js';
 
 export type { OllamaModel };
 

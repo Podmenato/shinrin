@@ -1,5 +1,5 @@
 {
-	"extends": "./.svelte-kit/tsconfig.json",
+	"extends": "$app/tsconfig",
 	"compilerOptions": {
 		"rewriteRelativeImportExtensions": true,
 		"allowJs": true,
@@ -11,7 +11,32 @@
 		"sourceMap": true,
 		"strict": true,
 		"moduleResolution": "bundler"
-	}
+	},
+	// config.typescript.config in vite.config.ts is deprecated as of kit 3.0.0-next.23 —
+	// these paths are the generated .svelte-kit/tsconfig.json's own include list (SvelteKit's
+	// defaults) plus the three extra entries that callback used to append, now declared here
+	// directly per the deprecation notice. Resolved relative to this file (project root), not
+	// .svelte-kit/ (see TypeScript's `extends` path-resolution rules).
+	"include": [
+		".svelte-kit/ambient.d.ts",
+		".svelte-kit/env.d.ts",
+		".svelte-kit/non-ambient.d.ts",
+		".svelte-kit/types/**/$types.d.ts",
+		"vite.config.js",
+		"vite.config.ts",
+		"src/**/*.js",
+		"src/**/*.ts",
+		"src/**/*.svelte",
+		"test/**/*.js",
+		"test/**/*.ts",
+		"test/**/*.svelte",
+		"tests/**/*.js",
+		"tests/**/*.ts",
+		"tests/**/*.svelte",
+		"drizzle.config.ts",
+		"drizzle.config.prod.ts",
+		"scripts/**/*.ts"
+	]
 	// Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
 	// except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
 	//

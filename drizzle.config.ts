@@ -1,5 +1,5 @@
 import { defineConfig } from 'drizzle-kit';
-import { dbPath } from '$lib/server/env';
+import { dbPath } from '#lib/server/env.js';
 
 // This is the dev config (drizzle-kit only supports --config for pointing
 // at an alternate file, not env files, hence a second drizzle.config.prod.ts

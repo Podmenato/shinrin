@@ -1,6 +1,6 @@
 import { query, command, form } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	agentSubagents,
 	agentTools,
@@ -9,8 +9,8 @@ import {
 	messages,
 	sessions,
 	tools
-} from '$lib/server/db/schema';
-import { insertSessionSchema } from '$lib/server/db/schemas';
+} from '#lib/server/db/schema.js';
+import { insertSessionSchema } from '#lib/server/db/schemas.js';
 import { and, desc, eq, inArray, isNull, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
 
