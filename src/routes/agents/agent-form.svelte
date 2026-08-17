@@ -60,6 +60,7 @@
 						toast.success('Agent saved');
 					} else {
 						toast.success('Agent created');
+						form.element.reset();
 						await goto(resolve('/agents/[agentId]', { agentId: form.result?.id ?? '' }));
 					}
 				} else {
@@ -97,7 +98,11 @@
 
 			<Field.Field>
 				<Field.Label for="subjectId">Subject</Field.Label>
-				<Select.Root type="single" name="subjectId" bind:value={subjectId}>
+				<Select.Root
+					type="single"
+					name={agentForm.fields.subjectId.as('hidden', '').name}
+					bind:value={subjectId}
+				>
 					<Select.Trigger id="subjectId" class="w-full">
 						{subjectTriggerContent}
 					</Select.Trigger>
@@ -122,7 +127,11 @@
 			</Field.Field>
 
 			<Field.Field orientation="horizontal">
-				<Checkbox id="isSubagent" name="b:isSubagent" bind:checked={isSubagent} />
+				<Checkbox
+					id="isSubagent"
+					name={agentForm.fields.isSubagent.as('hidden', true).name}
+					bind:checked={isSubagent}
+				/>
 				<Field.Label for="isSubagent" class="font-normal">Allow as subagent</Field.Label>
 			</Field.Field>
 
@@ -139,7 +148,11 @@
 
 				<Field.Field>
 					<Field.Label for="defaultModel">Model</Field.Label>
-					<Select.Root type="single" name="defaultModel" bind:value={defaultModel}>
+					<Select.Root
+						type="single"
+						name={agentForm.fields.defaultModel.as('hidden', '').name}
+						bind:value={defaultModel}
+					>
 						<Select.Trigger id="defaultModel" class="w-full">
 							{modelTriggerContent}
 						</Select.Trigger>
@@ -170,7 +183,7 @@
 									<Field.Field orientation="horizontal">
 										<Checkbox
 											id="tool-{tool.id}"
-											name="toolIds[]"
+											name={agentForm.fields.toolIds.as('checkbox', 'x').name}
 											value={tool.id}
 											checked={agent?.toolIds.includes(tool.id) ?? false}
 										/>
@@ -201,7 +214,7 @@
 									<Field.Field orientation="horizontal">
 										<Checkbox
 											id="subagent-{subagent.id}"
-											name="subagentIds[]"
+											name={agentForm.fields.subagentIds.as('checkbox', 'x').name}
 											value={subagent.id}
 											checked={agent?.subagentIds.includes(subagent.id) ?? false}
 										/>
