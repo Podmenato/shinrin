@@ -4,14 +4,22 @@ Personal AI language study-assistant app. A SvelteKit web UI on top of a tool-ca
 agent loop backed by Ollama (local LLM) and Anki (flashcards), with
 SQLite for persistence (sessions, messages, memories, study-topic
 progress, mistake logs) — chosen specifically because the app is headed
-toward an eventual Electron packaging, where a single embedded db file beats
-running a separate server process (see "Database" section below).
+toward eventual packaging as a Node Single Executable Application (SEA),
+where a single embedded db file beats running a separate server process
+(see "Database" section below). **There is no Electron plan** — some
+reasoning further down in this file still refers to Electron because it was
+written when that was the forward-looking assumption; SEA is the actual
+distribution direction as of 2026-08.
 
 ## Stack
 
+- Node 26 (`engines.node` in `package.json`, `.nvmrc`) — targeting the SEA
+  packaging direction (see header), not just a routine version bump
 - SvelteKit 3 (prerelease — see "SvelteKit 3" section below), Svelte 5 (runes mode,
   remote functions enabled), TypeScript, Tailwind 4
-- SQLite via `drizzle-orm`/`better-sqlite3`, schema in [src/lib/server/db/schema.ts](src/lib/server/db/schema.ts)
+- SQLite via `drizzle-orm`/`node:sqlite` (Node's built-in driver — not
+  `better-sqlite3`, changed 2026-08, see "Database" section below), schema in
+  [src/lib/server/db/schema.ts](src/lib/server/db/schema.ts)
 - Ollama as the model provider (local, `http://localhost:11434`)
 - Anki access via AnkiConnect (tools under `src/lib/server/tools/anki/`)
 - `pino` for logging
@@ -19,26 +27,94 @@ running a separate server process (see "Database" section below).
 
 ## Database
 
-Migrated from Postgres to SQLite (`better-sqlite3`) — driven by the Electron
-plan, not a preference swap: there's no way to bundle a real Postgres server
-inside a desktop app, and a single embedded db file is exactly the shape
-Electron wants (`app.getPath('userData')`, easy backup/export, nothing to
-run/manage separately). No production data existed yet at migration time, so
-there was no export/import step — just a schema rewrite.
+Migrated from Postgres to SQLite, originally motivated by an Electron
+packaging plan that's since been dropped entirely (see header) — the core
+reasoning still holds regardless of which packaging format actually ships:
+no way to bundle a real Postgres server inside a single-binary local app,
+and a single embedded db file is exactly the shape any local-first
+packaging wants (easy backup/export, nothing to run/manage separately). No
+production data existed yet at migration time, so there was no
+export/import step — just a schema rewrite.
 
-- **Driver: `better-sqlite3`, not `node:sqlite` or `libSQL`.** Benchmarked
-  faster than `node:sqlite` on local file ops (both are sync APIs, which
-  suits SvelteKit's server-side request/response model); `libSQL`'s
-  async/remote-first design costs 10–20x on local file ops, a bad trade for a
-  purely local db. The deciding factor over `node:sqlite` specifically:
-  **drizzle-kit does not support `node:sqlite` as a migration driver at
-  all** ([drizzle-team/drizzle-orm#5471](https://github.com/drizzle-team/drizzle-orm/issues/5471))
-  — you'd need `better-sqlite3` installed anyway just for `drizzle-kit
-push`/`generate`/`migrate`, which defeats the "zero native deps" appeal
-  that's the whole reason to reach for `node:sqlite`. Being a native module,
-  `better-sqlite3` needs `@electron/rebuild` in the eventual Electron
-  packaging pipeline — a real step, but the most well-documented native
-  module in that ecosystem, not exploratory risk.
+The driver itself later moved again, 2026-08, from `better-sqlite3` to
+`node:sqlite` — see below.
+
+- **Driver: `node:sqlite`, not `better-sqlite3` or `libSQL` (changed
+  2026-08).** Originally `better-sqlite3`, specifically because drizzle-kit
+  had *zero* `node:sqlite` support at the time
+  ([drizzle-team/drizzle-orm#5471](https://github.com/drizzle-team/drizzle-orm/issues/5471))
+  — that's resolved as of drizzle-orm/drizzle-kit's 1.0 line (this repo pins
+  `1.0.0-rc.4`, the current release-candidate tag), which removed the
+  original blocker entirely. `node:sqlite` is Node's own built-in driver —
+  genuinely zero native deps (no `@electron/rebuild`-equivalent packaging
+  step needed for whatever format this app eventually ships as), a real
+  advantage now that there's no Electron plan specifically motivating
+  tolerance for a native-module step. `libSQL`'s async/remote-first design
+  still costs 10–20x on local file ops vs. either sync driver, still a bad
+  trade for a purely local db, so that part of the original reasoning is
+  unchanged.
+  **`drizzle-orm/node-sqlite`'s connection setup differs from
+  `drizzle-orm/better-sqlite3`'s**: `drizzle({ client, relations })` (one
+  options object) instead of `drizzle(client, { schema })` (two positional
+  args) — see [createDb.ts](src/lib/server/db/createDb.ts). Migrating the
+  driver also required moving off `better-sqlite3`'s `.pragma('journal_mode
+  = WAL')` convenience method to the plain `.exec('PRAGMA journal_mode =
+  WAL')` `node:sqlite`'s `DatabaseSync` actually exposes.
+- **Relations are declared via `defineRelations()`, not `relations()`**
+  (drizzle v1's RQBv2 replacing RQBv1) — one `defineRelations(schemaTables,
+  (r) => ({...}))` call at the bottom of
+  [schema.ts](src/lib/server/db/schema.ts), not a `relations()` export per
+  table. Every relation states its own `from`/`to` explicitly, which is also
+  why the old `relationName` disambiguation `agentSubagentsRelations` used
+  to need (for its two agents-pointing FKs, `agentId` vs `subagentId`) is
+  gone — each relation's own `to` already says which column it's through,
+  nothing left to disambiguate.
+  **`r.one.X(...)` defaults to `optional: true` regardless of the underlying
+  FK's own `.notNull()`** (unlike v1, which inferred nullability from the FK
+  column itself) — every `one()` relation in this schema sets
+  `optional: false` explicitly except `agents.subject`, the one genuinely
+  nullable FK in the whole schema (`agents.subjectId` has no `.notNull()`).
+  Forgetting this on a new relation means TypeScript treats a
+  guaranteed-present joined row as possibly `null`/`undefined` everywhere
+  it's used — not silently wrong, but easy to miss until `pnpm check` flags
+  every call site touching it.
+- **`db.query.*`'s `where`/`orderBy` now take object shorthand, not operator
+  functions** — `where: { sessionId, createdAt: { gt: value } }`,
+  `orderBy: { createdAt: 'asc' }`, not `where: eq(col, val)` /
+  `orderBy: asc(col)`. RQBv2-specific; the plain query builder
+  (`db.select().where(eq(...))`) is unaffected and still uses the normal
+  `eq`/`and`/`gt`/etc. operators from `drizzle-orm`. A `RAW` key exists as an
+  escape hatch (`where: { RAW: (table, ops) => sql\`...\` }`) for filters the
+  shorthand genuinely can't express — but treat reaching for it as a prompt
+  to double-check first, not a default: `RAW`'s own field filters only take
+  literal values, so most cases that look like they need it (e.g. comparing
+  a column against *another row's* value) decompose into a plain second
+  lookup feeding a literal into the first query instead of one query trying
+  to do both — see the `cutoffMessage` lookup in
+  [contextManager.ts](src/lib/server/contextManager.ts)'s `load()` for the
+  pattern (a "correlated subquery" that turned out not to be correlated at
+  all once actually inspected — it never referenced the outer row). `RAW` is
+  for genuinely correlated subqueries or SQL functions the shorthand doesn't
+  model, not a substitute for a decomposition nobody's looked for yet.
+- **Cascading deletes are schema-level (`onDelete`), not reimplemented in
+  application code.** `sessions.parentSessionId` (subagent-invocation
+  sessions pointing back at their caller) and `messages.sessionId` /
+  `messageToolCalls.messageId` all cascade — deleting a session takes its
+  whole subagent-call tree (recursively, to arbitrary depth) and every
+  message/tool-call with it, in one statement:
+  `db.delete(sessions).where(eq(sessions.id, id))`, no transaction, no
+  manual delete ordering (`deleteSession` in
+  [agents.remote.ts](src/lib/agents.remote.ts)). `sessions.
+  summarizedThroughMessageId` gets `onDelete: 'set null'` instead of
+  cascade — it's purely informational (which message a stored summary
+  covers up to), so deleting that one old message shouldn't be able to
+  cascade into deleting the entire session that references it. This closed
+  a real, previously-unenforced gap: `deleteSession` used to delete
+  messages/tool-calls manually with no `parentSessionId` handling at all,
+  and would 500 with a foreign-key-constraint error on any session that had
+  ever spawned a subagent — found only by actually testing against a
+  session with real subagent history, not caught by type-checking or the
+  existing test suite either.
 - **Id/timestamp/json column conventions**, all in
   [schema.ts](src/lib/server/db/schema.ts): SQLite has no native
   uuid/boolean/timestamp types, so `generateUUID()`/`createdAt()`/`updatedAt()`
@@ -64,22 +140,45 @@ that originally motivated `jsonb`, just a different storage encoding.
   [db/index.ts](src/lib/server/db/index.ts)) rather than dropping/recreating
   a schema — the SQLite equivalent of the old `DROP SCHEMA public CASCADE`
   full-reset approach.
+- **Test database setup shells out to the `drizzle-kit push` CLI, not a
+  programmatic API** ([vitestSetup.ts](src/lib/server/db/vitestSetup.ts)) —
+  `pushSQLiteSchema` (`drizzle-kit/api`) doesn't exist for SQLite in
+  drizzle-kit's 1.0 line: confirmed directly against the installed package,
+  `drizzle-kit/api-sqlite` only exports `startStudioServer`, unlike
+  `drizzle-kit/api-postgres`, which still has push-related exports — a real
+  asymmetry in this release candidate, not a renamed import. Each test file
+  gets its own real temp sqlite file (`db/index.ts`'s `testDbPath`, computed
+  once per module evaluation via `os.tmpdir()` + `crypto.randomUUID()`), not
+  `:memory:` — a separate CLI subprocess can't reach into another process's
+  in-memory db — pushed via `execFileSync('drizzle-kit', ['push', '--force',
+  '--config', 'drizzle.config.test.ts'], { env: { TEST_DB_PATH } })`, the
+  exact same CLI dev already uses (`db:dev:push`/`scripts/dev.ts`) rather
+  than a second mechanism. [drizzle.config.test.ts](drizzle.config.test.ts)
+  reads its target path from `TEST_DB_PATH` — the only one of the three
+  drizzle configs that can't use a literal path, since the target is
+  generated fresh per test file, not knowable ahead of time. `afterAll`
+  cleans up the temp file plus its `-wal`/`-shm` sidecars.
 - Dropped entirely: `compose.dev.yaml`/`compose.prod.yaml` and the
   `POSTGRES_*` env vars — no server process to containerize anymore.
   `DATABASE_URL` is now a plain filesystem path (`.data/dev.sqlite3` /
   `.data/prod.sqlite3`, both gitignored).
 - **`db.transaction()` callbacks must be plain, non-`async` functions with no
-  `await` inside** — `better-sqlite3`'s underlying `.transaction()` wrapper
-  runs the callback synchronously and throws `Transaction function cannot
-return a promise` if the return value is thenable, which an `async`
-  function's return value always is, regardless of what's inside it. This
-  bit real code on the first migration pass: `postgres-js` transactions are
-  async, so `saveAgent`/`deleteSession` in
+  `await` inside** — originally discovered under `better-sqlite3` (its
+  underlying `.transaction()` wrapper runs the callback synchronously and
+  throws `Transaction function cannot return a promise` if the return value
+  is thenable, which an `async` function's return value always is,
+  regardless of what's inside it) and **re-confirmed to hold identically
+  under `node:sqlite`/`drizzle-orm/node-sqlite`** after the 2026-08 driver
+  migration, by reading `NodeSQLiteSession.transaction`'s actual installed
+  source directly rather than assuming: `const result = transaction(tx);` is
+  called and used without `await`, so an async callback's returned Promise
+  would just be ignored, letting `commit` fire before the callback's real
+  work finishes — same failure shape, same fix. This bit real code on the
+  original Postgres→SQLite migration: `postgres-js` transactions are async,
+  so `saveAgent`/`deleteSession` in
   [agents.remote.ts](src/lib/agents.remote.ts) both used `async (tx) => {…}`
   callbacks with `await`ed queries — worked fine under Postgres, 500'd
-  immediately under sqlite. Fix, confirmed by reading the installed
-  `better-sqlite3`/`drizzle-orm` source and testing directly against a real
-  db rather than guessing from docs: drop `async`, drop every `await` inside
+  immediately under sqlite. Fix: drop `async`, drop every `await` inside
   the callback, and call `.all()` (row-returning queries) or `.run()`
   (`delete`/plain `update`) explicitly on each query — the sync-mode query
   builder is a thenable that only executes once you either `await` it or
@@ -89,8 +188,10 @@ return a promise` if the return value is thenable, which an `async`
   via the outer non-transactional `db`) — extracted the pure graph-BFS into
   a sync `ancestorsFromEdges(edges, agentId)` so it can run inline inside
   the sync transaction (`tx.select().from(agentSubagents).all()`) instead of
-  needing an awaited call. These are currently the _only_ two
-  `db.transaction()` call sites in the app — chat message persistence
+  needing an awaited call. `saveAgent` is currently the only
+  `db.transaction()` call site in the app — `deleteSession` no longer needs
+  one at all (a single cascading `db.delete(sessions).where(...)` replaced
+  the old manual multi-step delete, see below), and chat message persistence
   ([contextManager.ts](src/lib/server/contextManager.ts)) never used
   `db.transaction()` at all (plain sequential `await db.insert(...)` calls,
   no atomicity wrapper), so it was never affected by this and has a
@@ -181,7 +282,7 @@ signal)` take the same signal directly; there is no `Tool.cancel()`
   plus three small MIT/Apache-2.0 npm libs, no native deps, no hosted
   scraping API (Firecrawl etc.) — same reasoning as the Postgres→SQLite
   migration above: no external paid service or server process to depend on
-  once this is a packaged Electron app. Only handles static/server-rendered
+  once this ships as a packaged, single-binary app. Only handles static/server-rendered
   pages (no JS execution) — covers Wikipedia and most blogs/news, not
   JS-hydrated or paywalled sites.
   - **The model can never type a URL itself.** `extractUserUrls()` regex-scans
@@ -740,24 +841,81 @@ size="icon"`) while a run is active, calling `cancelAgent` (see
   concurrent instances on the same page (e.g. a list of editable rows), it doesn't
   change handler behavior. See `saveAgent` in [agents.remote.ts](src/lib/agents.remote.ts).
 - **bits-ui form components (`Checkbox`, `Select`, ...) don't play well with
-  `agentForm.fields.x.as(...)`** — two separate gotchas, both hit in
+  `agentForm.fields.x.as(...)`** — three separate gotchas, all hit in
   [agent-form.svelte](src/routes/agents/agent-form.svelte):
   - They never dispatch real DOM `input`/`change` events on programmatic state
     changes (only on genuine user interaction with their internal hidden
     input), so the remote form's live tracking — `.value()`, `.issues()` —
     which only listens for `input` events on the `<form>`, never updates from
     them. Bind with real Svelte reactivity instead: `bind:checked`/`bind:value`
-    into a local `$state`, and set `name` by hand (e.g. `name="b:isSubagent"`
-    for a boolean field, matching the `b:`/`n:` prefix convention `.as()` would
-    otherwise add) so the value still submits correctly via `FormData` at
-    submit time — submission works fine regardless, since `handle_submit`
-    always reads the DOM fresh.
+    into a local `$state`.
   - `.as(...)` also injects a `type` attribute (`"checkbox"`, `"select"`, ...)
     that collides with bits-ui's own same-named, differently-typed `type` prop
     (`Checkbox`'s `type` is `"submit"|"button"`; `Select`'s is
     `"single"|"multiple"`) — so `.as(...)` doesn't type-check on these
-    components at all. Set `name`/`checked`/`value` directly instead (see the
-    `toolIds[]`/`subagentIds[]` checkboxes for the pattern).
+    components at all.
+  - **`name` can no longer be hand-set as a plain string (changed kit3
+    next.12) — this used to be the workaround for the two gotchas above, and
+    it now silently breaks submission, not just a style regret.** As of
+    [sveltejs/kit#16331](https://github.com/sveltejs/kit/pull/16331)
+    (closing [#16321](https://github.com/sveltejs/kit/issues/16321), "Tighten
+    up form transport stuff" — Rich Harris: *"it defeats type safety, and...
+    allows you to accidentally use a field from the wrong form"*), every
+    submitted field's `name` must end in `/<form-id>`, where `form-id` is
+    `djb2_hash(relative_file_path) + '/' + export_name` — an opaque,
+    build-generated identity string with **no public accessor**. It's the
+    same identity used for that remote function's own HTTP route (e.g.
+    `POST /_app/remote/1j9cdl/deleteSession` — `1j9cdl` is
+    `djb2_hash('src/lib/agents.remote.ts')`, confirmed by reading
+    `src/exports/vite/index.js`'s codegen directly). A hand-set
+    `name="subjectId"` can't reproduce this, and fails at submit time with
+    `Form contained a field that wasn't created with form.fields.as(...):
+    subjectId`. Checked SvelteKit's actual docs and the PR/issue that
+    introduced this for an official pattern covering headless/custom
+    components that can't spread `.as()`'s full output the way a native
+    `<input>` can — **there isn't one**; this is a genuine undocumented gap
+    for exactly the pattern this app relies on throughout (shadcn-svelte is
+    built on bits-ui). The fix: call `.as(...)` purely to extract the
+    correctly-suffixed `.name` off its return value, discarding the rest —
+    `as_func` is a pure computation with no side effects (confirmed by
+    reading `form-utils.js`; the `touched`/`dirty`/validation bookkeeping
+    happens separately, via real DOM event listeners attached to the
+    `<form>` element, not from calling `.as()` itself), so this isn't
+    exploiting an implementation detail — it's the one function actually
+    allowed to compute this string, used for the one part of its output
+    that's needed:
+    ```ts
+    name={agentForm.fields.subjectId.as('hidden', '').name}     // plain field, no prefix
+    name={agentForm.fields.isSubagent.as('hidden', true).name}  // boolean input → 'b:' prefix
+    name={agentForm.fields.toolIds.as('checkbox', 'x').name}    // array field → '[]' suffix
+    ```
+    The `type`/value argument passed only needs to trigger the right
+    `type_prefix`/`is_array` combination inside `get_type_prefix` — it's
+    never otherwise used; only `.name` is read off the result. See
+    `agent-form.svelte`'s `subjectId`/`defaultModel`/`isSubagent`/
+    `toolIds[]`/`subagentIds[]` for all five cases in this app.
+- **A custom `.enhance()` callback replaces SvelteKit's default one
+  entirely, including its automatic reset-on-success.** The framework's own
+  default callback (used when `.enhance()` is called with no argument) ends
+  with `HTMLFormElement.prototype.reset.call(instance.element)` after a
+  successful submit; supplying a custom callback — every form in this app
+  does, to control the success/error toast + navigation — opts out of that
+  silently. Bit `saveAgent`'s create path in `agent-form.svelte`: `saveAgent`
+  (used unkeyed for "create new", vs. `.for(agent.id)` for editing) is a
+  singleton cached across navigations, not scoped to the component's
+  lifecycle — text fields bound via `.as(...)` (`name`, `systemPrompt`,
+  `subagentDescription`) live in *its* state, not the component's, so
+  visiting "new agent" a second time showed the previous submission's
+  values. Fix: `form.element.reset()` in the create-success branch only —
+  not the save/edit branch, since resetting there would revert visible
+  fields to the pre-edit value, not the just-saved one. `form.element` is
+  non-nullable specifically inside an `enhance` callback
+  (`RemoteFormEnhanceInstance`'s type), unlike the outer `RemoteForm` type
+  (e.g. `agentForm` itself) where it can be `null` — no guard needed there.
+  There is no dedicated public `.reset()` method on the remote-form API
+  surface (checked the actual `RemoteForm`/`RemoteFormEnhanceInstance` type
+  definitions directly) — reproducing the native DOM reset yourself really
+  is the only option, not a workaround for some method that was missed.
 - **`Select.Root`'s bound `value` can never actually be `undefined`** — bits-ui
   force-defaults it to `""` (for `type="single"`) the instant it sees
   `undefined`, and that propagates back through `bind:value`. Don't compute
@@ -770,15 +928,21 @@ size="icon"`) while a run is active, calling `cancelAgent` (see
 
 ## SvelteKit 3
 
-Running `@sveltejs/kit@3.0.0-next.8` + `@sveltejs/adapter-node@6.0.0-next.3` — a
-deliberate, early jump onto the prerelease line, not an accident. Both are pinned to
-an **exact** version in `package.json` (no `^`) on purpose: bumping across `next.*`
-releases should stay a one-at-a-time, deliberate action, not something a routine
-`pnpm install` does silently. When bumping, check the actual
+Running `@sveltejs/kit@3.0.0-next.23` + `@sveltejs/adapter-node@6.0.0-next.10`
+(bumped 2026-08 from `next.8`/`next.3`) — a deliberate, early jump onto the
+prerelease line, not an accident. Both are pinned to an **exact** version in
+`package.json` (no `^`) on purpose: bumping across `next.*` releases should stay a
+one-at-a-time, deliberate action, not something a routine `pnpm install` does
+silently. When bumping, check the actual raw
 [CHANGELOG.md](https://github.com/sveltejs/kit/blob/version-3/packages/kit/CHANGELOG.md)
-(note: the repo's default branch is `version-3`, not `main`) for breaking changes
-rather than assuming — kit3 has been shedding a lot of long-deprecated APIs release
-to release.
+(note: the repo's default branch is `version-3`, not `main`) for breaking changes —
+**fetch it directly (`curl`/raw file), not through a summarizing tool.** A
+summarized read of this exact changelog during the `next.8`→`next.23` bump missed a
+real regression (the bits-ui/remote-forms field-naming break, "Remote functions"
+section below) that only surfaced afterward, the hard way, by actually testing the
+app — the summary simply dropped the relevant line. kit3 has been shedding a lot of
+long-deprecated APIs release to release, and — confirmed the hard way now —
+introducing real breaking changes that a quick skim, summarized or not, can miss.
 
 - **No `svelte.config.js`/`.ts`** — kit3 throws on startup (`... is no longer used`)
   if either file exists at all. All config (`adapter`, `experimental`, `typescript`,
@@ -796,12 +960,73 @@ to release.
   `$env/static/private`, etc. are gone (removed from the shipped types entirely, so
   this fails at the TypeScript level, not just at runtime). Declare each var your
   app actually uses in [src/env.ts](src/env.ts) via `defineEnvVars` (from
-  `@sveltejs/kit/hooks`), then import the specific named export from
+  `@sveltejs/kit/env` — moved here from `@sveltejs/kit/hooks` in the `next.8`→`next.23`
+  bump), then import the specific named export from
   `$app/env/private` (server-only) or `$app/env/public` — see
   [src/lib/server/db/index.ts](src/lib/server/db/index.ts) for the pattern. Only
   vars actually listed in `src/env.ts` exist as exports; nothing free-form. Values
   still come from `.env.[mode]` the same way as before — this only changes how you
   declare/import them, not where the values live.
+- **`$lib` was removed in favor of `#lib`** (a Node.js "subpath imports"
+  convention, not something SvelteKit invented) — every `$lib/...` import in
+  the app was rewritten to `#lib/...`, and `package.json` grew an
+  `"imports"` field (`{ "#lib": "./src/lib/index.js", "#lib/*": "./src/lib/*"
+  }`) declaring the mapping. Matches the official `sv migrate sveltekit-3`
+  codemod's own `lib-alias` task exactly (found *afterward*, by pulling the
+  real `sv` package source and reading `src/migrate/migrations/sveltekit-3/
+  tasks/lib-alias.ts` — should have been run in the first place instead of
+  hand-rolling the same migration, see "Remote functions" section above for
+  the broader lesson). **Every `#lib/...` specifier needs its real file
+  extension** (`.js` for `.ts` source, matching this project's existing
+  `.js`-for-`.ts` convention elsewhere; `/index.js` for directory barrels;
+  `.svelte`; `.svelte.js` for `.svelte.ts` runes files like
+  `errorState.svelte.ts`) — a known TypeScript `moduleResolution: "bundler"`
+  limitation ([microsoft/TypeScript#60003](https://github.com/microsoft/TypeScript/issues/60003)):
+  unlike plain relative imports, package.json subpath imports (`#foo`) don't
+  get extensionless/directory resolution, so `#lib/date` fails where
+  `#lib/date.js` works.
+- **`tsconfig.json`'s `extends` target moved from `./.svelte-kit/tsconfig.json`
+  to `$app/tsconfig`** (kit3 next.12). The generated base config's own
+  `paths` is empty by default now (no `$lib` mapping baked in, matching the
+  point above) — anything this project needs beyond the generated defaults
+  (`drizzle.config.ts`, `drizzle.config.prod.ts`, `drizzle.config.test.ts`,
+  `scripts/**/*.ts`) is now an explicit `include` array declared directly in
+  `tsconfig.json` itself, resolved relative to that file (project root), not
+  `.svelte-kit/`. This replaced `vite.config.ts`'s `sveltekit({ typescript:
+  { config: (c) => ({...}) } })` callback entirely — that mechanism (and the
+  same plugin's `alias` option, which this project used to use for a
+  since-removed, always-unused `@/*` mapping) is deprecated as of kit3
+  next.23's actual runtime, ahead of the general docs reflecting it —
+  confirmed live (a real deprecation warning, and a hard crash on the old
+  callback's expected shape), not inferred from changelog text.
+- **`resolve()` (from `$app/paths`) no longer accepts a pre-interpolated
+  template-literal pathname for a dynamic route** — `resolve(`/agents/${id}`)`
+  now fails typed-route checking; it needs the route-ID + params tuple form
+  instead: `resolve('/agents/[agentId]', { agentId: id })`. Affected every
+  dynamic `goto`/`href` call site across the app (agents, mistakes, stories,
+  subjects, topics, chat) during the `next.8`→`next.23` bump.
+- **Known upstream bug (reported, not yet fixed as of 2026-08): SSR crashes
+  on the very first request after a cold `pnpm dev` boot**, when
+  `experimental.async` is on (required here — the app uses `$derived(await
+  ...)` throughout for remote-function data fetching) and a `<svelte:head>`
+  element is involved (the root `+layout.svelte`'s favicon link) —
+  `TypeError: Cannot read properties of null (reading 'function')` in
+  `push_element` (`svelte/src/internal/server/dev.js`). Self-heals for every
+  request after the first; recurs identically after a restart. Root-caused
+  by reading Svelte's own source, not just observed: `ssr_context`
+  (`internal/server/context.js`) is a single module-level mutable variable,
+  not scoped per-render (no `AsyncLocalStorage`), and `renderer.js`'s
+  `result.finally(() => set_ssr_context(null))` means one async render's
+  completion can null out a *different*, still-in-progress render's context
+  if two happen to overlap — something a cold server (slow, uncached
+  transpilation widening the timing window) makes far more likely to
+  actually happen than a warm one. Confirmed **not** Node-version-specific
+  (reproduces identically on Node 24.19.0 and 26.7.0) and **not** a stale
+  dependency (the three source files involved are byte-identical between the
+  installed `svelte@5.56.5` and the latest available `5.56.9`). **Dev-only**
+  — `internal/server/dev.js` is stripped from production builds entirely, so
+  `pnpm build && node build` never hits this. No app-level fix exists (it's
+  inside Svelte's own async-SSR internals, not kit's); reported upstream.
 - **`+error.svelte` reads `error` as a component prop now, not `page.error`** — kit3
   generates a per-route `ErrorProps = { error: App.Error }` type (from `./$types`),
   and the auto-inserted `<svelte:boundary>` passes the caught error down as a prop
