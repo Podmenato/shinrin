@@ -3,7 +3,7 @@ import { ToolError } from '../tool';
 import { ankiRequest } from './ankiClient';
 import { GetDecksTool } from './getDecksTool';
 import { GetModelsTool } from './getModelsTool';
-import { toJsonObjectSchema, type JsonValue } from '$lib/json';
+import { toJsonObjectSchema, type JsonValue } from '#lib/json.js';
 
 export class AddNoteTool implements Tool {
 	definition: ToolDefinition = {

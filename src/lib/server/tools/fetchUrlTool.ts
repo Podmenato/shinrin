@@ -4,7 +4,7 @@ import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import type { Tool, ToolDefinition } from './tool';
 import { ToolError } from './tool';
-import { toJsonObjectSchema, type JsonValue } from '$lib/json';
+import { toJsonObjectSchema, type JsonValue } from '#lib/json.js';
 
 // TODO: this module will most likely need massive optimization rework, to save context and eliminate
 //  unnecessary text

@@ -1,5 +1,5 @@
 import type { Tool, ToolDefinition } from './tool';
-import { toJsonObjectSchema } from '$lib/json';
+import { toJsonObjectSchema } from '#lib/json.js';
 
 export class CurrentTimeTool implements Tool {
 	definition: ToolDefinition;

@@ -1,18 +1,18 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { getMistakeById, type Mistake } from '$lib/mistakes.remote';
-	import { createSession, getAgentsForSubject } from '$lib/agents.remote';
-	import { runAgent } from '$lib/sessions.remote';
-	import { getAvailableModels } from '$lib/ollamaAdmin.remote';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import * as Field from '$lib/components/ui/field/index.js';
-	import * as Select from '$lib/components/ui/select/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
+	import { getMistakeById, type Mistake } from '#lib/mistakes.remote.js';
+	import { createSession, getAgentsForSubject } from '#lib/agents.remote.js';
+	import { runAgent } from '#lib/sessions.remote.js';
+	import { getAvailableModels } from '#lib/ollamaAdmin.remote.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
-	import { formatDateTime } from '$lib/date';
+	import { formatDateTime } from '#lib/date.js';
 	import { toast } from 'svelte-sonner';
 
 	let { params }: { params: { mistakeId: string } } = $props();
@@ -59,7 +59,7 @@
 				prompt: `Let's go over the mistake "${mistake.title}".`
 			});
 
-			await goto(resolve(`/chat/${session.id}`));
+			await goto(resolve('/chat/[sessionId]', { sessionId: session.id }));
 		} catch {
 			toast.error('Failed to start conversation');
 		}

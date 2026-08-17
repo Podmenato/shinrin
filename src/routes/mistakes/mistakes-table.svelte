@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { getAllMistakes } from '$lib/mistakes.remote';
-	import DataTable, { type DataTableColumn } from '$lib/components/data-table/data-table.svelte';
+	import { getAllMistakes } from '#lib/mistakes.remote.js';
+	import DataTable, { type DataTableColumn } from '#lib/components/data-table/data-table.svelte';
 	import CircleXIcon from '@lucide/svelte/icons/circle-x';
-	import { formatDateTime } from '$lib/date';
+	import { formatDateTime } from '#lib/date.js';
 
 	const mistakes = getAllMistakes();
 
 	type Mistake = Awaited<ReturnType<typeof getAllMistakes>>[number];
 
 	function openMistake(mistake: Mistake) {
-		goto(resolve(`/mistakes/${mistake.id}`));
+		goto(resolve('/mistakes/[mistakeId]', { mistakeId: mistake.id }));
 	}
 
 	const columns: DataTableColumn<Mistake>[] = [

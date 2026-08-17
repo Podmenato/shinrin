@@ -3,7 +3,7 @@ import { ToolError } from './tool';
 import { db } from '../db/index';
 import { memories } from '../db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
-import { toJsonObjectSchema, type JsonValue } from '$lib/json';
+import { toJsonObjectSchema, type JsonValue } from '#lib/json.js';
 
 export class DeleteMemoryTool implements Tool {
 	definition: ToolDefinition;

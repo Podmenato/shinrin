@@ -1,6 +1,6 @@
 import type { Tool, ToolDefinition } from '../tool';
 import { ankiRequest } from './ankiClient';
-import { toJsonObjectSchema, type JsonValue } from '$lib/json';
+import { toJsonObjectSchema, type JsonValue } from '#lib/json.js';
 
 export class GetIntervalsTool implements Tool {
 	definition: ToolDefinition = {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { getSubjectById } from '$lib/subjects.remote';
+	import { getSubjectById } from '#lib/subjects.remote.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import SubjectForm from '../subject-form.svelte';
 

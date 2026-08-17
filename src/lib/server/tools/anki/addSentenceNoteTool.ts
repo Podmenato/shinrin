@@ -2,7 +2,7 @@ import type { Tool, ToolDefinition } from '../tool';
 import { ToolError } from '../tool';
 import { ankiRequest } from './ankiClient';
 import { GetDecksTool } from './getDecksTool';
-import { toJsonObjectSchema, type JsonValue } from '$lib/json';
+import { toJsonObjectSchema, type JsonValue } from '#lib/json.js';
 
 const MODEL_NAME = 'Agent sentence';
 

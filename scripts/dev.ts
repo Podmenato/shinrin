@@ -4,7 +4,7 @@
 // not on Ctrl+C. The dev db is a local sqlite file (see dbPath() in
 // src/lib/server/env.ts) — no server process to start beforehand.
 import { spawn, spawnSync } from 'node:child_process';
-import { loadEnv } from '$lib/server/env';
+import { loadEnv } from '#lib/server/env.js';
 
 loadEnv('development');
 

@@ -1,6 +1,6 @@
 import { ToolError } from '../tool';
 import { GetDecksTool } from './getDecksTool';
-import type { JsonSchemaArgument, JsonValue } from '$lib/json';
+import type { JsonSchemaArgument, JsonValue } from '#lib/json.js';
 
 const VALID_STATES = new Set(['new', 'due', 'learn', 'review', 'suspended', 'buried']);
 

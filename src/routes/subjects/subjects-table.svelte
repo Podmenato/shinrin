@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { getSubjects, type Subject } from '$lib/subjects.remote';
-	import DataTable, { type DataTableColumn } from '$lib/components/data-table/data-table.svelte';
+	import { getSubjects, type Subject } from '#lib/subjects.remote.js';
+	import DataTable, { type DataTableColumn } from '#lib/components/data-table/data-table.svelte';
 	import LibraryBigIcon from '@lucide/svelte/icons/library-big';
 	import { resolve } from '$app/paths';
-	import { formatDate } from '$lib/date';
+	import { formatDate } from '#lib/date.js';
 
 	const subjects = getSubjects();
 
 	function openSubject(subject: Subject) {
-		goto(resolve(`/subjects/${subject.id}`));
+		goto(resolve('/subjects/[subjectId]', { subjectId: subject.id }));
 	}
 
 	const columns: DataTableColumn<Subject>[] = [

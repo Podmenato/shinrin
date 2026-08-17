@@ -1,10 +1,10 @@
 <script lang="ts">
 	import * as v from 'valibot';
-	import { quizSchema, type QuizQuestion } from '$lib/quiz';
-	import type { JsonValue } from '$lib/json';
-	import { Button } from '$lib/components/ui/button';
-	import * as Card from '$lib/components/ui/card';
-	import * as Field from '$lib/components/ui/field';
+	import { quizSchema, type QuizQuestion } from '#lib/quiz.js';
+	import type { JsonValue } from '#lib/json.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
 	import SingleChoiceQuestion from './single-choice-question.svelte';
 	import MultipleChoiceQuestion from './multiple-choice-question.svelte';
 

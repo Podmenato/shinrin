@@ -2,8 +2,8 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { mode, toggleMode } from 'mode-watcher';
-	import { errorState } from '$lib/errorState.svelte';
-	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
+	import { errorState } from '#lib/errorState.svelte.js';
+	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
 	import HouseIcon from '@lucide/svelte/icons/house';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import BotIcon from '@lucide/svelte/icons/bot';

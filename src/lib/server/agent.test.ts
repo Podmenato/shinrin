@@ -1,13 +1,12 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { eq } from 'drizzle-orm';
 import { Agent } from './agent';
 import { ContextManager } from './contextManager';
 import { FakeModelProvider } from './modelProviders/fakeModelProvider';
 import { db } from './db/index';
-import { agents, sessions, tools as toolsTable, messages, messageToolCalls } from './db/schema';
+import { agents, sessions, messages, tools as toolsTable, messageToolCalls } from './db/schema';
 import type { Tool } from './tools/tool';
 import { ToolError } from './tools/tool';
-import { toJsonObjectSchema } from '$lib/json';
+import { toJsonObjectSchema } from '#lib/json.js';
 
 async function seedSession() {
 	const [agent] = await db.insert(agents).values({ name: 'agent' }).returning();
@@ -25,7 +24,7 @@ function fakeTool(name: string, execute: Tool['execute']): Tool {
 	};
 }
 
-// `db` is a shared ':memory:' instance for the whole test file (not recreated per test), so
+// `db` is a shared temp-file instance for the whole test file (not recreated per test), so
 // every test's rows need clearing out afterward to avoid unique-constraint collisions (e.g.
 // agents.name/tools.name) and cross-test bleed.
 afterEach(async () => {
@@ -47,7 +46,7 @@ describe('Agent.run', () => {
 
 		expect(result).toBe('hello there');
 		const persisted = await db.query.messages.findMany({
-			where: eq(messages.sessionId, session.id)
+			where: { sessionId: session.id }
 		});
 		expect(persisted.map((m) => m.role)).toEqual(['user', 'assistant']);
 	});
@@ -119,7 +118,7 @@ describe('Agent.run', () => {
 		expect(result).toBe('finally');
 		expect(provider.calls).toHaveLength(2);
 		const persisted = await db.query.messages.findMany({
-			where: eq(messages.sessionId, session.id)
+			where: { sessionId: session.id }
 		});
 		expect(persisted.some((m) => m.role === 'system' && m.content.includes('Retry'))).toBe(true);
 	});

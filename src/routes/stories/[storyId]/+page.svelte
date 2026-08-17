@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { getStoryById } from '$lib/stories.remote';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import * as Tabs from '$lib/components/ui/tabs/index.js';
-	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { getStoryById } from '#lib/stories.remote.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import PaperclipIcon from '@lucide/svelte/icons/paperclip';
-	import { formatDateTime } from '$lib/date';
+	import { formatDateTime } from '#lib/date.js';
 
 	let { params }: { params: { storyId: string } } = $props();
 	const { storyId } = $derived(params);
@@ -85,7 +85,7 @@
 					{#each story.resources as resource (resource.id)}
 						<li>
 							<a
-								href={resolve(`/files/${resource.fileId}`)}
+								href={resolve('/files/[fileId]', { fileId: resource.fileId })}
 								target="_blank"
 								rel="noopener noreferrer"
 								class="flex w-fit items-center gap-2 text-sm text-foreground hover:text-primary hover:underline"

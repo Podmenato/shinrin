@@ -1,7 +1,7 @@
 import { query, form } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
-import { subjects } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { subjects } from '#lib/server/db/schema.js';
 import { eq, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
 
@@ -14,7 +14,7 @@ export type Subject = InferSelectModel<typeof subjects>;
 
 /** Returns a single subject by id. */
 export const getSubjectById = query(v.pipe(v.string(), v.uuid()), async (id) => {
-	const subject = await db.query.subjects.findFirst({ where: eq(subjects.id, id) });
+	const subject = await db.query.subjects.findFirst({ where: { id } });
 	if (!subject) {
 		error(404, 'Subject not found');
 	}

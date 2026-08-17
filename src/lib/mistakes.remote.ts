@@ -1,7 +1,7 @@
 import { query } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
-import { subjects, mistakeObservations } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { subjects, mistakeObservations } from '#lib/server/db/schema.js';
 import { desc, eq } from 'drizzle-orm';
 import * as v from 'valibot';
 

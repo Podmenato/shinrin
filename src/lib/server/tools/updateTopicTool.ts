@@ -3,7 +3,7 @@ import { ToolError } from './tool';
 import { db } from '../db/index';
 import { studyTopics } from '../db/schema';
 import { eq } from 'drizzle-orm';
-import { toJsonObjectSchema, type JsonValue } from '$lib/json';
+import { toJsonObjectSchema, type JsonValue } from '#lib/json.js';
 
 export class UpdateTopicTool implements Tool {
 	definition: ToolDefinition;

@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { Checkbox } from '$lib/components/ui/checkbox';
-	import * as Field from '$lib/components/ui/field';
-	import { cn } from '$lib/utils';
-	import type { MultipleChoiceQuestion } from '$lib/quiz';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import { cn } from '#lib/utils.js';
+	import type { MultipleChoiceQuestion } from '#lib/quiz.js';
 
 	const {
 		question,

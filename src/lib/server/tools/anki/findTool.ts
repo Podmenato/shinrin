@@ -1,7 +1,7 @@
 import type { Tool, ToolDefinition } from '../tool';
 import { ankiRequest } from './ankiClient';
 import { FIND_DESCRIPTION, FIND_PROPERTIES, buildFindQuery, validateFindArgs } from './findQuery';
-import { toJsonObjectSchema, type JsonValue } from '$lib/json';
+import { toJsonObjectSchema, type JsonValue } from '#lib/json.js';
 
 export class FindTool implements Tool {
 	definition: ToolDefinition = {

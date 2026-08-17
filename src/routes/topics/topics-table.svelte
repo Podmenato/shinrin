@@ -1,19 +1,19 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { getAllTopics, type Topic } from '$lib/topics.remote';
+	import { getAllTopics, type Topic } from '#lib/topics.remote.js';
 	import DataTable, {
 		renderComponent,
 		type DataTableColumn
-	} from '$lib/components/data-table/data-table.svelte';
+	} from '#lib/components/data-table/data-table.svelte';
 	import TopicStatusBadge from './topic-status-badge.svelte';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
-	import { formatDateTime } from '$lib/date';
+	import { formatDateTime } from '#lib/date.js';
 
 	const topics = getAllTopics();
 
 	function openTopic(topic: Topic) {
-		goto(resolve(`/topics/${topic.id}`));
+		goto(resolve('/topics/[topicId]', { topicId: topic.id }));
 	}
 
 	const columns: DataTableColumn<Topic>[] = [

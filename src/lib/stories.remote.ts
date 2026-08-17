@@ -1,14 +1,12 @@
 import { query } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
-import { stories } from '$lib/server/db/schema';
-import { desc, eq } from 'drizzle-orm';
+import { db } from '#lib/server/db/index.js';
 import * as v from 'valibot';
 
 /** Returns all stories with the subjects they currently have content in. */
 export const getAllStories = query(async () => {
 	const rows = await db.query.stories.findMany({
-		orderBy: desc(stories.updatedAt),
+		orderBy: { updatedAt: 'desc' },
 		with: {
 			content: {
 				columns: { subjectId: true },
@@ -26,7 +24,7 @@ export const getAllStories = query(async () => {
 /** Returns a single story by id, with its content and resources. */
 export const getStoryById = query(v.pipe(v.string(), v.uuid()), async (id) => {
 	const story = await db.query.stories.findFirst({
-		where: eq(stories.id, id),
+		where: { id },
 		with: {
 			content: { with: { subject: true } },
 			resources: { with: { file: true } }

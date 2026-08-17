@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { getAgentById } from '$lib/agents.remote';
+	import { getAgentById } from '#lib/agents.remote.js';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import AgentForm from '../agent-form.svelte';
 

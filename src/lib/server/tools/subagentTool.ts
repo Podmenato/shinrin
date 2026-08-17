@@ -2,7 +2,7 @@ import type { Tool, ToolDefinition } from './tool';
 import { ToolError } from './tool';
 import { Agent } from '../agent';
 import { OllamaProvider } from '../modelProviders/ollamaProvider';
-import { toJsonObjectSchema, type JsonValue } from '$lib/json';
+import { toJsonObjectSchema, type JsonValue } from '#lib/json.js';
 
 /** Wraps another agent as a tool: calling it runs a full nested agent loop and returns its final reply. */
 export class SubagentTool implements Tool {

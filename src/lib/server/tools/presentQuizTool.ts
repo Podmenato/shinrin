@@ -1,8 +1,8 @@
 import type { Tool, ToolDefinition } from './tool';
 import { ToolError } from './tool';
 import * as v from 'valibot';
-import { quizSchema } from '$lib/quiz';
-import { toJsonObjectSchema, type JsonValue } from '$lib/json';
+import { quizSchema } from '#lib/quiz.js';
+import { toJsonObjectSchema, type JsonValue } from '#lib/json.js';
 
 export class PresentQuizTool implements Tool {
 	definition: ToolDefinition = {

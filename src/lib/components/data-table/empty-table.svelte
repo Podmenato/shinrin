@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as Empty from '$lib/components/ui/empty';
+	import * as Empty from '#lib/components/ui/empty/index.js';
 	import type { Component } from 'svelte';
 
 	let { title, description, Icon }: { title: string; description?: string; Icon: Component } =

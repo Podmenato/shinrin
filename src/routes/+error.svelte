@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import ErrorEmptyState from '$lib/components/error-empty-state.svelte';
+	import ErrorEmptyState from '#lib/components/error-empty-state.svelte';
 	import CircleAlertIcon from '@lucide/svelte/icons/circle-alert';
 	import type { ErrorProps } from './$types';
 

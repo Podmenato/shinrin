@@ -1,16 +1,8 @@
 import { query, command, form } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
-import {
-	agentSubagents,
-	agentTools,
-	agents,
-	messageToolCalls,
-	messages,
-	sessions,
-	tools
-} from '$lib/server/db/schema';
-import { insertSessionSchema } from '$lib/server/db/schemas';
+import { db } from '#lib/server/db/index.js';
+import { agentSubagents, agentTools, agents, sessions, tools } from '#lib/server/db/schema.js';
+import { insertSessionSchema } from '#lib/server/db/schemas.js';
 import { and, desc, eq, inArray, isNull, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
 
@@ -42,7 +34,7 @@ export const getAgentsForSubject = query(
 /** Returns a single agent by id, along with the ids of its assigned tools and subagents. */
 export const getAgentById = query(v.pipe(v.string(), v.uuid()), async (id) => {
 	const agent = await db.query.agents.findFirst({
-		where: eq(agents.id, id),
+		where: { id },
 		with: { agentTools: true, subagents: true }
 	});
 	if (!agent) {
@@ -123,7 +115,7 @@ export const getAssignableSubagents = query(
 
 /** Returns all sessions for the given agent. */
 export const getAgentSessions = query(v.pipe(v.string(), v.uuid()), async (agentId) => {
-	const agent = await db.query.agents.findFirst({ where: eq(agents.id, agentId) });
+	const agent = await db.query.agents.findFirst({ where: { id: agentId } });
 	if (!agent) {
 		error(404, 'Agent not found');
 	}
@@ -165,24 +157,7 @@ export const createSession = command(
 
 /** Permanently deletes a session along with its messages and their tool calls. */
 export const deleteSession = command(v.pipe(v.string(), v.uuid()), async (id) => {
-	// Sync, non-async callback: better-sqlite3's transaction wrapper throws if the callback
-	// returns a promise, so every query inside needs an explicit sync terminator (.all()/.run())
-	// instead of await.
-	db.transaction((tx) => {
-		const sessionMessages = tx
-			.select({ id: messages.id })
-			.from(messages)
-			.where(eq(messages.sessionId, id))
-			.all();
-		const messageIds = sessionMessages.map((m) => m.id);
-
-		if (messageIds.length > 0) {
-			tx.delete(messageToolCalls).where(inArray(messageToolCalls.messageId, messageIds)).run();
-			tx.delete(messages).where(eq(messages.sessionId, id)).run();
-		}
-
-		tx.delete(sessions).where(eq(sessions.id, id)).run();
-	});
+	await db.delete(sessions).where(eq(sessions.id, id));
 	await getAllSessions().refresh();
 });
 

@@ -1,22 +1,29 @@
-import { pushSQLiteSchema } from 'drizzle-kit/api';
-import { db } from './index';
-import * as schema from './schema';
+import { execFileSync } from 'node:child_process';
+import { rmSync } from 'node:fs';
+import { afterAll } from 'vitest';
+import { testDbPath } from './index';
 
-// db/index.ts already points `db` at a fresh ':memory:' instance whenever VITEST is set (vitest
-// sets it automatically) — this just has to fill that instance with the schema once before each
-// test file's tests run. drizzle-kit/api types this against LibSQLDatabase, but it only needs
-// the shared sqlite session interface, which the better-sqlite3-backed `db` also satisfies.
-const { statementsToExecute } = await pushSQLiteSchema(
-	schema,
-	db as unknown as Parameters<typeof pushSQLiteSchema>[1]
-);
-
-// Deliberately not calling the returned `apply()` — it runs each statement through drizzle's
-// `.all()`, which better-sqlite3 throws on for any statement with no result set (every DDL
-// statement here: `CREATE TABLE`, etc.) with "This statement does not return data. Use run()
-// instead." libsql (what this API is actually built/typed around) tolerates that; better-sqlite3
-// doesn't. `$client.exec()` runs raw SQL without expecting a result set, which is exactly what
-// schema DDL is, so it sidesteps the bug instead of fighting it.
-for (const statement of statementsToExecute) {
-	db.$client.exec(statement);
+// pushSQLiteSchema (the old programmatic push API, `drizzle-kit/api`) doesn't exist for SQLite in
+// drizzle-kit v1 — confirmed against the installed package: `drizzle-kit/api-sqlite` only exports
+// `startStudioServer`, unlike `drizzle-kit/api-postgres`, which still has push-related exports. So
+// this shells out to the same `drizzle-kit push` CLI dev already uses (`db:dev:push`), pointed at
+// this test file's own temp sqlite file (`testDbPath`, see db/index.ts) via drizzle.config.test.ts
+// instead of the shared dev db. `stdio: 'pipe'` keeps the CLI's own progress output out of test
+// runs on the happy path; on failure the captured output is surfaced so it's still debuggable.
+try {
+	execFileSync(
+		'node_modules/.bin/drizzle-kit',
+		['push', '--force', '--config', 'drizzle.config.test.ts'],
+		{ env: { ...process.env, TEST_DB_PATH: testDbPath }, stdio: 'pipe' }
+	);
+} catch (e) {
+	const err = e as { stdout?: Buffer; stderr?: Buffer };
+	console.error(err.stdout?.toString(), err.stderr?.toString());
+	throw e;
 }
+
+afterAll(() => {
+	for (const suffix of ['', '-wal', '-shm']) {
+		rmSync(`${testDbPath}${suffix}`, { force: true });
+	}
+});

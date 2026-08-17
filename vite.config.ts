@@ -19,20 +19,6 @@ export default defineConfig({
 			adapter: adapter(),
 			experimental: {
 				remoteFunctions: true
-			},
-			typescript: {
-				config: (config) => ({
-					...config,
-					include: [
-						...config.include,
-						'../drizzle.config.ts',
-						'../drizzle.config.prod.ts',
-						'../scripts/**/*.ts'
-					]
-				})
-			},
-			alias: {
-				'@/*': './path/to/lib/*'
 			}
 		})
 	],

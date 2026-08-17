@@ -1,21 +1,21 @@
 <script lang="ts">
-	import { saveAgent, getAssignableSubagents, type Agent } from '$lib/agents.remote';
-	import { getTools } from '$lib/tools.remote';
-	import { getSubjects } from '$lib/subjects.remote';
-	import { getAvailableModels } from '$lib/ollamaAdmin.remote';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import * as Field from '$lib/components/ui/field/index.js';
-	import * as Select from '$lib/components/ui/select/index.js';
-	import * as Collapsible from '$lib/components/ui/collapsible/index.js';
-	import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
-	import { Textarea } from '$lib/components/ui/textarea/index.js';
-	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
+	import { saveAgent, getAssignableSubagents, type Agent } from '#lib/agents.remote.js';
+	import { getTools } from '#lib/tools.remote.js';
+	import { getSubjects } from '#lib/subjects.remote.js';
+	import { getAvailableModels } from '#lib/ollamaAdmin.remote.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import { toast } from 'svelte-sonner';
 	import DeleteAgentAction from './[agentId]/delete-agent-action.svelte';
-	import { formatDateTime } from '$lib/date';
+	import { formatDateTime } from '#lib/date.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { isHttpError } from '@sveltejs/kit';
@@ -60,7 +60,8 @@
 						toast.success('Agent saved');
 					} else {
 						toast.success('Agent created');
-						await goto(resolve(`/agents/${form.result?.id}`));
+						form.element.reset();
+						await goto(resolve('/agents/[agentId]', { agentId: form.result?.id ?? '' }));
 					}
 				} else {
 					toast.error('Saving failed');
@@ -97,7 +98,11 @@
 
 			<Field.Field>
 				<Field.Label for="subjectId">Subject</Field.Label>
-				<Select.Root type="single" name="subjectId" bind:value={subjectId}>
+				<Select.Root
+					type="single"
+					name={agentForm.fields.subjectId.as('hidden', '').name}
+					bind:value={subjectId}
+				>
 					<Select.Trigger id="subjectId" class="w-full">
 						{subjectTriggerContent}
 					</Select.Trigger>
@@ -122,7 +127,11 @@
 			</Field.Field>
 
 			<Field.Field orientation="horizontal">
-				<Checkbox id="isSubagent" name="b:isSubagent" bind:checked={isSubagent} />
+				<Checkbox
+					id="isSubagent"
+					name={agentForm.fields.isSubagent.as('hidden', true).name}
+					bind:checked={isSubagent}
+				/>
 				<Field.Label for="isSubagent" class="font-normal">Allow as subagent</Field.Label>
 			</Field.Field>
 
@@ -139,7 +148,11 @@
 
 				<Field.Field>
 					<Field.Label for="defaultModel">Model</Field.Label>
-					<Select.Root type="single" name="defaultModel" bind:value={defaultModel}>
+					<Select.Root
+						type="single"
+						name={agentForm.fields.defaultModel.as('hidden', '').name}
+						bind:value={defaultModel}
+					>
 						<Select.Trigger id="defaultModel" class="w-full">
 							{modelTriggerContent}
 						</Select.Trigger>
@@ -170,7 +183,7 @@
 									<Field.Field orientation="horizontal">
 										<Checkbox
 											id="tool-{tool.id}"
-											name="toolIds[]"
+											name={agentForm.fields.toolIds.as('checkbox', 'x').name}
 											value={tool.id}
 											checked={agent?.toolIds.includes(tool.id) ?? false}
 										/>
@@ -201,7 +214,7 @@
 									<Field.Field orientation="horizontal">
 										<Checkbox
 											id="subagent-{subagent.id}"
-											name="subagentIds[]"
+											name={agentForm.fields.subagentIds.as('checkbox', 'x').name}
 											value={subagent.id}
 											checked={agent?.subagentIds.includes(subagent.id) ?? false}
 										/>
