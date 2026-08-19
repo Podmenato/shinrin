@@ -36,7 +36,8 @@ export const FIND_PROPERTIES: Record<string, JsonSchemaArgument> = {
 	states: {
 		type: 'array',
 		items: { type: 'string' },
-		description: 'Card state filters. Valid values: new, due, learn, review, suspended, buried.',
+		description:
+			'Card state filters. Valid values: new, due, learn, review, suspended, buried. "learn" already includes relearning cards — there is no separate "relearn" value.',
 		optional: true
 	},
 	props: {
@@ -75,6 +76,7 @@ export const FIND_DESCRIPTION =
 	'\n' +
 	'states — card state filters (array)\n' +
 	'  new, due, learn, review, suspended, buried\n' +
+	'  "learn" already covers relearning cards too — Anki has no separate is:relearn search, so never pass "relearn" as a state.\n' +
 	'\n' +
 	'props — property comparisons without the prop: prefix (array)\n' +
 	'  lapses>3, ease<2.5, ivl<=7, reps<5\n' +

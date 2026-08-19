@@ -45,7 +45,7 @@ export class CardsInfoTool implements Tool {
 	definition: ToolDefinition = {
 		name: 'cards_info',
 		description:
-			'Returns scheduling data (ease factor, interval, lapses, reps, due) and content for a list of card IDs. Use after find_cards to analyze card performance.',
+			'Returns scheduling data (ease factor, interval, lapses, reps, due) and full note content (fields) for a list of card IDs. Use after find (type:card, the default). This already includes everything get_note_info would return, so there is no need to also call get_note_info on these IDs (and doing so is wrong: card IDs are not note IDs). The "note" field in each result is the underlying note ID, included for reference only.',
 		parameters: toJsonObjectSchema({
 			cardIds: {
 				type: 'array',

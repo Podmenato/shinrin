@@ -39,7 +39,7 @@ export class GetNoteInfoTool implements Tool {
 	definition: ToolDefinition = {
 		name: 'get_note_info',
 		description:
-			'Returns full note data (fields, tags, model) for a list of note IDs. Use this on a small, targeted set of IDs from find_notes — not on large results.',
+			'Returns full note data (fields, tags, model) for a list of note IDs. Use this on a small, targeted set of note IDs from find (type:note) — not on large results. These must be real note IDs, not card IDs: find (type:card, the default) returns card IDs, which are a different ID space and will silently return the wrong note here instead of erroring. If you started from card IDs, use cards_info instead — it already returns the same note fields plus scheduling data.',
 		parameters: toJsonObjectSchema({
 			noteIds: {
 				type: 'array',

@@ -8,8 +8,9 @@ export class FindTool implements Tool {
 		name: 'find',
 		description:
 			'Search Anki cards or notes by structured filters. Returns matching IDs.\n' +
-			'  type:card (default) — returns card IDs. Use when you need card-level data like ease or intervals.\n' +
-			'  type:note — returns note IDs. Use when you need note-level data or to check for duplicates.\n' +
+			'  type:card (default) — returns card IDs. If you need note content/fields for these cards, use cards_info — NEVER get_note_info.\n' +
+			'  type:note — returns note IDs. If you need note content/fields, use get_note_info.\n' +
+			'  Card IDs and note IDs are different numbers, never interchangeable — passing a card ID to get_note_info silently returns the wrong note, not an error.\n' +
 			'\n' +
 			FIND_DESCRIPTION,
 		parameters: toJsonObjectSchema({
