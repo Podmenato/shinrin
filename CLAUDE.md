@@ -1,20 +1,19 @@
 # shinrin
 
-Personal AI language study-assistant app. A SvelteKit web UI on top of a tool-calling
-agent loop backed by Ollama (local LLM) and Anki (flashcards), with
-SQLite for persistence (sessions, messages, memories, study-topic
-progress, mistake logs) — chosen specifically because the app is headed
-toward eventual packaging as a Node Single Executable Application (SEA),
-where a single embedded db file beats running a separate server process
-(see "Database" section below). **There is no Electron plan** — some
-reasoning further down in this file still refers to Electron because it was
-written when that was the forward-looking assumption; SEA is the actual
-distribution direction as of 2026-08.
+Personal AI language study-assistant app: a SvelteKit web UI on top of a
+tool-calling agent loop backed by Ollama (local LLM) and Anki (flashcards),
+with SQLite for persistence (sessions, messages, memories, study-topic
+progress, mistake logs). It's a local-first, single-user tool — no
+separate server process, no cloud account, everything lives in one SQLite
+file on disk (see "Database" section below). The intended audience is
+existing Anki users comfortable running it from source (clone, `pnpm
+install`, see "Dev commands" below) — there's no packaged installer and
+none is currently planned; running it depends on having Ollama and Anki
+(with the AnkiConnect add-on) already set up locally.
 
 ## Stack
 
-- Node 26 (`engines.node` in `package.json`, `.nvmrc`) — targeting the SEA
-  packaging direction (see header), not just a routine version bump
+- Node 26 (`engines.node` in `package.json`, `.nvmrc`)
 - SvelteKit 3 (prerelease — see "SvelteKit 3" section below), Svelte 5 (runes mode,
   remote functions enabled), TypeScript, Tailwind 4
 - SQLite via `drizzle-orm`/`node:sqlite` (Node's built-in driver — not
@@ -27,12 +26,10 @@ distribution direction as of 2026-08.
 
 ## Database
 
-Migrated from Postgres to SQLite, originally motivated by an Electron
-packaging plan that's since been dropped entirely (see header) — the core
-reasoning still holds regardless of which packaging format actually ships:
-no way to bundle a real Postgres server inside a single-binary local app,
-and a single embedded db file is exactly the shape any local-first
-packaging wants (easy backup/export, nothing to run/manage separately). No
+Migrated from Postgres to SQLite early on: this is a local-first,
+single-user app, so a real Postgres server (a separate process to run and
+manage) never fit — a single embedded db file is exactly the shape a
+local app wants (easy backup/export, nothing to run/manage separately). No
 production data existed yet at migration time, so there was no
 export/import step — just a schema rewrite.
 
@@ -46,10 +43,9 @@ The driver itself later moved again, 2026-08, from `better-sqlite3` to
   — that's resolved as of drizzle-orm/drizzle-kit's 1.0 line (this repo pins
   `1.0.0-rc.4`, the current release-candidate tag), which removed the
   original blocker entirely. `node:sqlite` is Node's own built-in driver —
-  genuinely zero native deps (no `@electron/rebuild`-equivalent packaging
-  step needed for whatever format this app eventually ships as), a real
-  advantage now that there's no Electron plan specifically motivating
-  tolerance for a native-module step. `libSQL`'s async/remote-first design
+  genuinely zero native deps, avoiding the native-module rebuild step
+  (`node-gyp`/prebuilt-binary fetching) `better-sqlite3` needed on install.
+  `libSQL`'s async/remote-first design
   still costs 10–20x on local file ops vs. either sync driver, still a bad
   trade for a purely local db, so that part of the original reasoning is
   unchanged.
@@ -158,10 +154,10 @@ that originally motivated `jsonb`, just a different storage encoding.
   drizzle configs that can't use a literal path, since the target is
   generated fresh per test file, not knowable ahead of time. `afterAll`
   cleans up the temp file plus its `-wal`/`-shm` sidecars.
-- Dropped entirely: `compose.dev.yaml`/`compose.prod.yaml` and the
-  `POSTGRES_*` env vars — no server process to containerize anymore.
-  `DATABASE_URL` is now a plain filesystem path (`.data/dev.sqlite3` /
-  `.data/prod.sqlite3`, both gitignored).
+- Dropped entirely: `compose.dev.yaml`/`compose.prod.yaml`, the
+  `POSTGRES_*` env vars, and `DATABASE_URL` itself — no server process to
+  containerize anymore, and no connection string left to configure once the
+  db is just a fixed local file path (see "Environment" below).
 - **`db.transaction()` callbacks must be plain, non-`async` functions with no
   `await` inside** — originally discovered under `better-sqlite3` (its
   underlying `.transaction()` wrapper runs the callback synchronously and
@@ -1160,6 +1156,11 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
 
 ## Dev commands (use pnpm)
 
+**Prerequisites**: Node 26 (`.nvmrc`), pnpm, a locally-running Ollama
+(`http://localhost:11434`, with at least one model pulled), and Anki
+running with the [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
+add-on installed. Then `pnpm install`.
+
 - `pnpm dev` / `pnpm dev-debug` / `pnpm dev-trace` — runs [scripts/dev.ts](scripts/dev.ts).
   If `DB_WIPE_ON_START=true` (set in `.env.development`, default on) it first
   deletes the sqlite db file, then always does
@@ -1172,8 +1173,9 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
   The `-debug`/`-trace` variants set `LOG_LEVEL` for `pino` (default level is
   `info`, see [src/lib/server/logger.ts](src/lib/server/logger.ts)).
   No server process to start beforehand — the db is a local sqlite file.
-- `pnpm build` then `pnpm start` — production build/run. `start` loads
-  `.env.production` via Node's `--env-file` and does **not** seed or clean.
+- `pnpm build` then `pnpm start` — production build/run
+  (`NODE_ENV=production node build`). Does **not** seed or clean, and
+  doesn't load any `.env` file itself — see "Environment" below.
 - `pnpm db:dev:push` / `db:dev:studio` / `db:dev:seed` / `db:dev:clean` — dev
   DB tools; `push` is also what `scripts/dev.ts` calls automatically.
 - `pnpm db:prod:generate` / `db:prod:migrate` / `db:prod:studio` — real
@@ -1190,14 +1192,20 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
 
 ## Environment
 
-- Per-mode env files following Vite's `.env.[mode]` convention:
-  `.env.development` / `.env.production` (gitignored, real values) with
-  `.env.development.example` / `.env.production.example` as committed
-  templates. Each carries just `DATABASE_URL` — a filesystem path to a local
-  sqlite file (`.data/dev.sqlite3` / `.data/prod.sqlite3`, both gitignored),
-  so both can exist on the same machine side by side.
-- [src/lib/server/env.ts](src/lib/server/env.ts) — `loadEnv(mode)` loads the
-  right `.env.[mode]` file for anything that runs outside Vite (drizzle
-  configs, seed, clean, `scripts/dev.ts`). SvelteKit's own dev/build/preview
-  don't need it — Vite already loads `.env.[mode]` for the app's own env vars (see
-  "SvelteKit 3" section above for how those are declared/imported now).
+- The db path itself is **not** env-configurable — [env.ts](src/lib/server/env.ts)'s
+  `dbPath(mode)` returns a literal `.data/dev.sqlite3` / `.data/prod.sqlite3`
+  (both gitignored) per mode, so dev and prod db files can coexist on the
+  same machine without any setup. This used to be a `DATABASE_URL` env var
+  back when the db was Postgres and the connection string was the
+  configurable part — dropped as dead weight once it was just a fixed local
+  path either way, not restored since.
+- `.env.development` (gitignored; `.env.development.example` is the
+  committed template) currently carries exactly one var,
+  `DB_WIPE_ON_START` — see "Dev commands" above. There's no `.env.production`
+  or example for it: nothing reads one today, since a production run
+  (`pnpm start`) needs no configuration beyond `NODE_ENV=production` itself.
+- [env.ts](src/lib/server/env.ts)'s `loadEnv(mode)` loads the right
+  `.env.[mode]` file for anything that runs outside Vite (drizzle configs,
+  `scripts/dev.ts`). SvelteKit's own dev/build/preview don't need it — Vite
+  already loads `.env.[mode]` for the app's own env vars (see "SvelteKit 3"
+  section above for how those are declared/imported now).

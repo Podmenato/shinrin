@@ -11,50 +11,46 @@ per-subject state (topics you're working on, mistakes you keep making) across
 sessions, plus direct access to your real Anki collection instead of just
 talking _about_ flashcards.
 
-It's also a personal project for learning how to build agentic systems
-end-to-end — the architecture choices (tool registry, subagents, contextual
-tools, remote functions) are as much about exploring that space as they are
-about shipping a study app. See [CLAUDE.md](CLAUDE.md) for the full
-architecture rundown.
+It's local-first and single-user: no account, no hosted service — everything
+runs against your own Ollama instance and Anki collection, persisted to one
+SQLite file. There's no packaged installer; running it means cloning the
+repo and running it from source (see "Setup" below), and it assumes you
+already have Ollama and Anki set up.
 
-## Where this is headed
+## Features
 
-Working end-to-end today: chat with a language-tutor agent backed by Ollama,
-tool access to Anki, persistent per-agent memory, and subagents (an agent can
-delegate to another agent as a tool call).
+- Chat with a language-tutor agent that has persistent per-agent memory and
+  direct tool access to your Anki collection (search, add notes, and more)
+  via AnkiConnect.
+- Subagents — an agent can delegate to another agent as a tool call (e.g. a
+  general tutor delegating Anki-specific work to a dedicated Anki agent).
+- Article reading — paste a URL and the agent fetches and reads it
+  (`fetch_url`) for vocab/grammar help grounded in real text.
+- Agent-authored quizzes (`present_quiz`), rendered and graded inline in the
+  chat.
+- Stories — durable, revisitable content (a saved article, a roleplay
+  transcript, a logged work session) the agent can read and write,
+  independent of which language you're studying it in.
+- An MCP server (`pnpm mcp:server`) exposing a `save_story` tool, so external
+  MCP clients (Claude Code, Claude Desktop) can hand content into shinrin
+  directly.
 
-Under consideration / in progress:
-
-- **Article reading & discovery** — feed the agent a webpage and have it help
-  with vocab/grammar, then quiz you on it; eventually have it surface
-  articles matching your current level on its own.
-- **Quiz generation** — agent-authored quizzes with graded, tracked results.
-- **Handwriting/kanji practice** — a canvas UI where a vision model grades
-  stroke input.
-- **Work-session logging via MCP → roleplay practice** — expose an MCP
-  server from Shinrin (e.g. `logWorkSession`) that a separate Claude Code
-  session can call after a work day to log what was done; the tutor agent
-  then uses that log as material for Japanese-workplace roleplay practice —
-  describing real engineering work in the vocab/register you'd actually need.
-- A continuing **frontend overhaul** on shadcn-svelte, and general agent-loop
-  improvements (streaming, tool-call visibility, multi-provider support).
-
-None of the above is committed to a timeline — this is a side project that
-grows as time and interest allow.
 
 ## Setup
+
+Prerequisites: Node 26, pnpm, a locally-running Ollama
+(`http://localhost:11434`, with at least one model pulled), and Anki running
+with the [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on
+installed.
 
 ```sh
 pnpm install
 cp .env.development.example .env.development
-cp .env.production.example .env.production   # only needed once you actually deploy
 ```
 
-The `.env.*` files hold the app's `DATABASE_URL` — a plain filesystem path to
-a local sqlite file, one per environment. Dev defaults to
-`.data/dev.sqlite3`; prod to `.data/prod.sqlite3` (gitignored), so both can
-exist on the same machine if needed. There's no separate DB server or
-container to run.
+The db is just a local SQLite file, one per environment
+(`.data/dev.sqlite3` / `.data/prod.sqlite3`, both gitignored) — no DB server
+or container to run, and no connection string to configure.
 
 ## Developing
 
@@ -92,5 +88,6 @@ pnpm db:prod:migrate                    # apply migrations
 pnpm build && pnpm start                # build and run the app itself
 ```
 
-`pnpm start` runs `node --env-file=.env.production build`, i.e. plain
-adapter-node output — there's no app Dockerfile or DB container involved.
+`pnpm start` runs `NODE_ENV=production node build` — plain adapter-node
+output, no Dockerfile or DB container involved, and no `.env.production`
+file needed (production needs no configuration beyond `NODE_ENV` itself).
