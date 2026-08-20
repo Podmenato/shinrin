@@ -2,8 +2,10 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { runQuickAsk } from '#lib/quickAsks.remote.js';
+	import { runAgent } from '#lib/sessions.remote.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import PlayIcon from '@lucide/svelte/icons/play';
+	import { isHttpError } from '@sveltejs/kit';
 	import { toast } from 'svelte-sonner';
 
 	let { quickAskId }: { quickAskId: string } = $props();
@@ -14,10 +16,13 @@
 		e.stopPropagation();
 		running = true;
 		try {
-			const session = await runQuickAsk(quickAskId);
+			const { session, seedPrompt } = await runQuickAsk(quickAskId);
+			runAgent({ sessionId: session.id, prompt: seedPrompt }).catch(() => {
+				toast.error('Failed to send message');
+			});
 			await goto(resolve('/chat/[sessionId]', { sessionId: session.id }));
-		} catch {
-			toast.error('Failed to run quick ask');
+		} catch (err) {
+			toast.error(isHttpError(err) ? err.body.message : 'Failed to run quick ask');
 		} finally {
 			running = false;
 		}

@@ -6,7 +6,6 @@ import { ANKI_CARD_STATES } from '#lib/server/tools/anki/findQuery.js';
 import { FindTool } from '#lib/server/tools/anki/findTool.js';
 import { CardsInfoTool } from '#lib/server/tools/anki/cardsInfoTool.js';
 import { createSession } from '#lib/agents.remote.js';
-import { runAgent } from '#lib/sessions.remote.js';
 import { desc, eq, getColumns, type InferSelectModel } from 'drizzle-orm';
 import type { JsonValue } from '#lib/json.js';
 import * as v from 'valibot';
@@ -84,33 +83,40 @@ export const deleteQuickAsk = command(v.pipe(v.string(), v.uuid()), async (id) =
 });
 
 /**
- * Runs a quick ask: deterministically pre-fetches the matching cards via AnkiConnect — the same
- * `find` + `cards_info` tools an agent would call itself, just with args taken from the stored
- * preset instead of decided by a model — pastes them into the configured prompt, and starts a
- * fresh session with that as the first message. This is the whole point of a quick ask: skip the
- * tool-call round trips (and their latency) an agent would otherwise need to fetch the same cards.
+ * Prepares a quick ask: deterministically pre-fetches the matching cards via AnkiConnect — the
+ * same `find` + `cards_info` tools an agent would call itself, just with args taken from the
+ * stored preset instead of decided by a model — and pastes them into the configured prompt. This
+ * is the whole point of a quick ask: skip the tool-call round trips (and their latency) an agent
+ * would otherwise need to fetch the same cards.
+ *
+ * Creates the session but deliberately does *not* start the agent run itself — that stays a
+ * client-initiated `runAgent` call (see `run-quick-ask-action.svelte`), matching every other
+ * session-starting flow in the app, so the calling tab's `runAgent.pending` reflects the run and
+ * the session screen's cancel button / composer-disabled state work correctly after redirect.
  */
-export const runQuickAsk = command(v.pipe(v.string(), v.uuid()), async (id) => {
-	const quickAsk = await db.query.quickAsks.findFirst({ where: { id } });
-	if (!quickAsk) {
-		error(404, 'Quick ask not found');
+export const runQuickAsk = command(
+	v.pipe(v.string(), v.uuid()),
+	async (id): Promise<{ session: { id: string }; seedPrompt: string }> => {
+		const quickAsk = await db.query.quickAsks.findFirst({ where: { id } });
+		if (!quickAsk) {
+			error(404, 'Quick ask not found');
+		}
+
+		const signal = new AbortController().signal;
+		const findArgs: Record<string, JsonValue> = { deck: quickAsk.deck, states: [quickAsk.state] };
+		if (quickAsk.days !== null) findArgs.added = quickAsk.days;
+
+		const cardIds = JSON.parse(await new FindTool().execute(findArgs, signal)) as number[];
+		const cardsJson = await new CardsInfoTool().execute({ cardIds }, signal);
+
+		const seedPrompt = `${quickAsk.prompt}\n\nCards:\n${cardsJson}`;
+
+		const session = await createSession({
+			agentId: quickAsk.agentId,
+			name: quickAsk.name,
+			model: quickAsk.model
+		});
+
+		return { session, seedPrompt };
 	}
-
-	const signal = new AbortController().signal;
-	const findArgs: Record<string, JsonValue> = { deck: quickAsk.deck, states: [quickAsk.state] };
-	if (quickAsk.days !== null) findArgs.added = quickAsk.days;
-
-	const cardIds = JSON.parse(await new FindTool().execute(findArgs, signal)) as number[];
-	const cardsJson = await new CardsInfoTool().execute({ cardIds }, signal);
-
-	const seedPrompt = `${quickAsk.prompt}\n\nCards:\n${cardsJson}`;
-
-	const session = await createSession({
-		agentId: quickAsk.agentId,
-		name: quickAsk.name,
-		model: quickAsk.model
-	});
-	await runAgent({ sessionId: session.id, prompt: seedPrompt });
-
-	return session;
-});
+);

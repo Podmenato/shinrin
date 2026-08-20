@@ -25,7 +25,7 @@
 
 	let agentId = $state('');
 	let model = $state('');
-	const isStarting = $derived(createSession.pending > 0 || runAgent.pending > 0);
+	const isStarting = $derived(createSession.pending > 0);
 	const isStartDisabled = $derived(!agentId || !model || isStarting);
 
 	const agentTriggerContent = $derived(
@@ -61,7 +61,9 @@
 				systemPrompt: buildStudySystemPrompt(topic)
 			});
 
-			await runAgent({ sessionId: session.id, prompt: `Let's study "${topic.topic}".` });
+			runAgent({ sessionId: session.id, prompt: `Let's study "${topic.topic}".` }).catch(() => {
+				toast.error('Failed to send message');
+			});
 
 			await goto(resolve('/chat/[sessionId]', { sessionId: session.id }));
 		} catch {

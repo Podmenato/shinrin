@@ -24,7 +24,7 @@
 
 	let agentId = $state('');
 	let model = $state('');
-	const isStarting = $derived(createSession.pending > 0 || runAgent.pending > 0);
+	const isStarting = $derived(createSession.pending > 0);
 	const isStartDisabled = $derived(!agentId || !model || isStarting);
 
 	const agentTriggerContent = $derived(
@@ -54,9 +54,11 @@
 				systemPrompt: buildMistakeSystemPrompt(mistake)
 			});
 
-			await runAgent({
+			runAgent({
 				sessionId: session.id,
 				prompt: `Let's go over the mistake "${mistake.title}".`
+			}).catch(() => {
+				toast.error('Failed to send message');
 			});
 
 			await goto(resolve('/chat/[sessionId]', { sessionId: session.id }));
