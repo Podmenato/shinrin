@@ -38,7 +38,7 @@ The driver itself later moved again, 2026-08, from `better-sqlite3` to
 
 - **Driver: `node:sqlite`, not `better-sqlite3` or `libSQL` (changed
   2026-08).** Originally `better-sqlite3`, specifically because drizzle-kit
-  had *zero* `node:sqlite` support at the time
+  had _zero_ `node:sqlite` support at the time
   ([drizzle-team/drizzle-orm#5471](https://github.com/drizzle-team/drizzle-orm/issues/5471))
   — that's resolved as of drizzle-orm/drizzle-kit's 1.0 line (this repo pins
   `1.0.0-rc.4`, the current release-candidate tag), which removed the
@@ -54,11 +54,11 @@ The driver itself later moved again, 2026-08, from `better-sqlite3` to
   options object) instead of `drizzle(client, { schema })` (two positional
   args) — see [createDb.ts](src/lib/server/db/createDb.ts). Migrating the
   driver also required moving off `better-sqlite3`'s `.pragma('journal_mode
-  = WAL')` convenience method to the plain `.exec('PRAGMA journal_mode =
-  WAL')` `node:sqlite`'s `DatabaseSync` actually exposes.
+= WAL')` convenience method to the plain `.exec('PRAGMA journal_mode =
+WAL')` `node:sqlite`'s `DatabaseSync` actually exposes.
 - **Relations are declared via `defineRelations()`, not `relations()`**
   (drizzle v1's RQBv2 replacing RQBv1) — one `defineRelations(schemaTables,
-  (r) => ({...}))` call at the bottom of
+(r) => ({...}))` call at the bottom of
   [schema.ts](src/lib/server/db/schema.ts), not a `relations()` export per
   table. Every relation states its own `from`/`to` explicitly, which is also
   why the old `relationName` disambiguation `agentSubagentsRelations` used
@@ -81,15 +81,15 @@ The driver itself later moved again, 2026-08, from `better-sqlite3` to
   (`db.select().where(eq(...))`) is unaffected and still uses the normal
   `eq`/`and`/`gt`/etc. operators from `drizzle-orm`. A `RAW` key exists as an
   escape hatch (`where: { RAW: (table, ops) => sql\`...\` }`) for filters the
-  shorthand genuinely can't express — but treat reaching for it as a prompt
-  to double-check first, not a default: `RAW`'s own field filters only take
-  literal values, so most cases that look like they need it (e.g. comparing
-  a column against *another row's* value) decompose into a plain second
-  lookup feeding a literal into the first query instead of one query trying
-  to do both — see the `cutoffMessage` lookup in
-  [contextManager.ts](src/lib/server/contextManager.ts)'s `load()` for the
-  pattern (a "correlated subquery" that turned out not to be correlated at
-  all once actually inspected — it never referenced the outer row). `RAW` is
+shorthand genuinely can't express — but treat reaching for it as a prompt
+to double-check first, not a default: `RAW`'s own field filters only take
+literal values, so most cases that look like they need it (e.g. comparing
+a column against *another row's* value) decompose into a plain second
+lookup feeding a literal into the first query instead of one query trying
+to do both — see the `cutoffMessage`lookup in
+[contextManager.ts](src/lib/server/contextManager.ts)'s`load()`for the
+pattern (a "correlated subquery" that turned out not to be correlated at
+all once actually inspected — it never referenced the outer row).`RAW` is
   for genuinely correlated subqueries or SQL functions the shorthand doesn't
   model, not a substitute for a decomposition nobody's looked for yet.
 - **Cascading deletes are schema-level (`onDelete`), not reimplemented in
@@ -101,7 +101,7 @@ The driver itself later moved again, 2026-08, from `better-sqlite3` to
   `db.delete(sessions).where(eq(sessions.id, id))`, no transaction, no
   manual delete ordering (`deleteSession` in
   [agents.remote.ts](src/lib/agents.remote.ts)). `sessions.
-  summarizedThroughMessageId` gets `onDelete: 'set null'` instead of
+summarizedThroughMessageId` gets `onDelete: 'set null'` instead of
   cascade — it's purely informational (which message a stored summary
   covers up to), so deleting that one old message shouldn't be able to
   cascade into deleting the entire session that references it. This closed
@@ -147,7 +147,7 @@ that originally motivated `jsonb`, just a different storage encoding.
   once per module evaluation via `os.tmpdir()` + `crypto.randomUUID()`), not
   `:memory:` — a separate CLI subprocess can't reach into another process's
   in-memory db — pushed via `execFileSync('drizzle-kit', ['push', '--force',
-  '--config', 'drizzle.config.test.ts'], { env: { TEST_DB_PATH } })`, the
+'--config', 'drizzle.config.test.ts'], { env: { TEST_DB_PATH } })`, the
   exact same CLI dev already uses (`db:dev:push`/`scripts/dev.ts`) rather
   than a second mechanism. [drizzle.config.test.ts](drizzle.config.test.ts)
   reads its target path from `TEST_DB_PATH` — the only one of the three
@@ -855,8 +855,8 @@ size="icon"`) while a run is active, calling `cancelAgent` (see
     it now silently breaks submission, not just a style regret.** As of
     [sveltejs/kit#16331](https://github.com/sveltejs/kit/pull/16331)
     (closing [#16321](https://github.com/sveltejs/kit/issues/16321), "Tighten
-    up form transport stuff" — Rich Harris: *"it defeats type safety, and...
-    allows you to accidentally use a field from the wrong form"*), every
+    up form transport stuff" — Rich Harris: _"it defeats type safety, and...
+    allows you to accidentally use a field from the wrong form"_), every
     submitted field's `name` must end in `/<form-id>`, where `form-id` is
     `djb2_hash(relative_file_path) + '/' + export_name` — an opaque,
     build-generated identity string with **no public accessor**. It's the
@@ -866,7 +866,7 @@ size="icon"`) while a run is active, calling `cancelAgent` (see
     `src/exports/vite/index.js`'s codegen directly). A hand-set
     `name="subjectId"` can't reproduce this, and fails at submit time with
     `Form contained a field that wasn't created with form.fields.as(...):
-    subjectId`. Checked SvelteKit's actual docs and the PR/issue that
+subjectId`. Checked SvelteKit's actual docs and the PR/issue that
     introduced this for an official pattern covering headless/custom
     components that can't spread `.as()`'s full output the way a native
     `<input>` can — **there isn't one**; this is a genuine undocumented gap
@@ -880,11 +880,11 @@ size="icon"`) while a run is active, calling `cancelAgent` (see
     exploiting an implementation detail — it's the one function actually
     allowed to compute this string, used for the one part of its output
     that's needed:
-    ```ts
+    `ts
     name={agentForm.fields.subjectId.as('hidden', '').name}     // plain field, no prefix
     name={agentForm.fields.isSubagent.as('hidden', true).name}  // boolean input → 'b:' prefix
     name={agentForm.fields.toolIds.as('checkbox', 'x').name}    // array field → '[]' suffix
-    ```
+    `
     The `type`/value argument passed only needs to trigger the right
     `type_prefix`/`is_array` combination inside `get_type_prefix` — it's
     never otherwise used; only `.name` is read off the result. See
@@ -900,7 +900,7 @@ size="icon"`) while a run is active, calling `cancelAgent` (see
   (used unkeyed for "create new", vs. `.for(agent.id)` for editing) is a
   singleton cached across navigations, not scoped to the component's
   lifecycle — text fields bound via `.as(...)` (`name`, `systemPrompt`,
-  `subagentDescription`) live in *its* state, not the component's, so
+  `subagentDescription`) live in _its_ state, not the component's, so
   visiting "new agent" a second time showed the previous submission's
   values. Fix: `form.element.reset()` in the create-success branch only —
   not the save/edit branch, since resetting there would revert visible
@@ -967,10 +967,10 @@ introducing real breaking changes that a quick skim, summarized or not, can miss
   convention, not something SvelteKit invented) — every `$lib/...` import in
   the app was rewritten to `#lib/...`, and `package.json` grew an
   `"imports"` field (`{ "#lib": "./src/lib/index.js", "#lib/*": "./src/lib/*"
-  }`) declaring the mapping. Matches the official `sv migrate sveltekit-3`
-  codemod's own `lib-alias` task exactly (found *afterward*, by pulling the
+}`) declaring the mapping. Matches the official `sv migrate sveltekit-3`
+  codemod's own `lib-alias` task exactly (found _afterward_, by pulling the
   real `sv` package source and reading `src/migrate/migrations/sveltekit-3/
-  tasks/lib-alias.ts` — should have been run in the first place instead of
+tasks/lib-alias.ts` — should have been run in the first place instead of
   hand-rolling the same migration, see "Remote functions" section above for
   the broader lesson). **Every `#lib/...` specifier needs its real file
   extension** (`.js` for `.ts` source, matching this project's existing
@@ -989,7 +989,7 @@ introducing real breaking changes that a quick skim, summarized or not, can miss
   `scripts/**/*.ts`) is now an explicit `include` array declared directly in
   `tsconfig.json` itself, resolved relative to that file (project root), not
   `.svelte-kit/`. This replaced `vite.config.ts`'s `sveltekit({ typescript:
-  { config: (c) => ({...}) } })` callback entirely — that mechanism (and the
+{ config: (c) => ({...}) } })` callback entirely — that mechanism (and the
   same plugin's `alias` option, which this project used to use for a
   since-removed, always-unused `@/*` mapping) is deprecated as of kit3
   next.23's actual runtime, ahead of the general docs reflecting it —
@@ -1004,7 +1004,7 @@ introducing real breaking changes that a quick skim, summarized or not, can miss
 - **Known upstream bug (reported, not yet fixed as of 2026-08): SSR crashes
   on the very first request after a cold `pnpm dev` boot**, when
   `experimental.async` is on (required here — the app uses `$derived(await
-  ...)` throughout for remote-function data fetching) and a `<svelte:head>`
+...)` throughout for remote-function data fetching) and a `<svelte:head>`
   element is involved (the root `+layout.svelte`'s favicon link) —
   `TypeError: Cannot read properties of null (reading 'function')` in
   `push_element` (`svelte/src/internal/server/dev.js`). Self-heals for every
@@ -1013,7 +1013,7 @@ introducing real breaking changes that a quick skim, summarized or not, can miss
   (`internal/server/context.js`) is a single module-level mutable variable,
   not scoped per-render (no `AsyncLocalStorage`), and `renderer.js`'s
   `result.finally(() => set_ssr_context(null))` means one async render's
-  completion can null out a *different*, still-in-progress render's context
+  completion can null out a _different_, still-in-progress render's context
   if two happen to overlap — something a cold server (slow, uncached
   transpilation widening the timing window) makes far more likely to
   actually happen than a warm one. Confirmed **not** Node-version-specific

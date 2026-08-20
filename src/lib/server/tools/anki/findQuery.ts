@@ -2,7 +2,8 @@ import { ToolError } from '../tool';
 import { GetDecksTool } from './getDecksTool';
 import type { JsonSchemaArgument, JsonValue } from '#lib/json.js';
 
-const VALID_STATES = new Set(['new', 'due', 'learn', 'review', 'suspended', 'buried']);
+export const ANKI_CARD_STATES = ['new', 'due', 'learn', 'review', 'suspended', 'buried'] as const;
+const VALID_STATES = new Set<string>(ANKI_CARD_STATES);
 
 export type FindArgs = {
 	deck: string;

@@ -205,6 +205,21 @@ export const storyResources = sqliteTable('story_resources', {
 	createdAt: createdAt()
 });
 
+export const quickAsks = sqliteTable('quick_asks', {
+	id: generateUUID(),
+	name: text().notNull(),
+	agentId: text('agent_id')
+		.notNull()
+		.references(() => agents.id),
+	model: text().notNull(),
+	deck: text().notNull(),
+	state: text().notNull(),
+	days: integer('days'),
+	prompt: text('prompt').notNull(),
+	createdAt: createdAt(),
+	updatedAt: updatedAt()
+});
+
 // RQBv1's `relations()` was replaced by RQBv2's `defineRelations()` in drizzle-orm v1 — every
 // relation now states its own `from`/`to` explicitly, which is also why the old `relationName`
 // disambiguation on agentSubagents' two agents-pointing FKs (agentId vs subagentId) is no longer
@@ -227,7 +242,8 @@ const schemaTables = {
 	stories,
 	storyContent,
 	files,
-	storyResources
+	storyResources,
+	quickAsks
 };
 
 export const relations = defineRelations(schemaTables, (r) => ({
@@ -245,7 +261,8 @@ export const relations = defineRelations(schemaTables, (r) => ({
 		agentTools: r.many.agentTools({ from: r.agents.id, to: r.agentTools.agentId }),
 		sessions: r.many.sessions({ from: r.agents.id, to: r.sessions.agentId }),
 		subagents: r.many.agentSubagents({ from: r.agents.id, to: r.agentSubagents.agentId }),
-		subagentOf: r.many.agentSubagents({ from: r.agents.id, to: r.agentSubagents.subagentId })
+		subagentOf: r.many.agentSubagents({ from: r.agents.id, to: r.agentSubagents.subagentId }),
+		quickAsks: r.many.quickAsks({ from: r.agents.id, to: r.quickAsks.agentId })
 	},
 	tools: {
 		agentTools: r.many.agentTools({ from: r.tools.id, to: r.agentTools.toolId })
@@ -312,5 +329,8 @@ export const relations = defineRelations(schemaTables, (r) => ({
 	storyResources: {
 		story: r.one.stories({ from: r.storyResources.storyId, to: r.stories.id, optional: false }),
 		file: r.one.files({ from: r.storyResources.fileId, to: r.files.id, optional: false })
+	},
+	quickAsks: {
+		agent: r.one.agents({ from: r.quickAsks.agentId, to: r.agents.id, optional: false })
 	}
 }));

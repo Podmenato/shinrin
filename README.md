@@ -35,7 +35,6 @@ already have Ollama and Anki set up.
   MCP clients (Claude Code, Claude Desktop) can hand content into shinrin
   directly.
 
-
 ## Setup
 
 Prerequisites: Node 26, pnpm, a locally-running Ollama

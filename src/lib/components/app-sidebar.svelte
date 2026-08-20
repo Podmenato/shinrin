@@ -12,12 +12,14 @@
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import BookMarkedIcon from '@lucide/svelte/icons/book-marked';
 	import LibraryBigIcon from '@lucide/svelte/icons/library-big';
+	import ZapIcon from '@lucide/svelte/icons/zap';
 	import SunIcon from '@lucide/svelte/icons/sun';
 	import MoonIcon from '@lucide/svelte/icons/moon';
 
 	const items = [
 		{ title: 'Home', href: resolve('/'), icon: HouseIcon },
 		{ title: 'Chat', href: resolve('/chat'), icon: MessageSquareIcon },
+		{ title: 'Quick asks', href: resolve('/quick-asks'), icon: ZapIcon },
 		{ title: 'Agents', href: resolve('/agents'), icon: BotIcon },
 		{ title: 'Mistakes', href: resolve('/mistakes'), icon: CircleXIcon },
 		{ title: 'Topics', href: resolve('/topics'), icon: BookOpenIcon },

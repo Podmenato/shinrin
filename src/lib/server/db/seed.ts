@@ -7,6 +7,7 @@ import {
 	files,
 	messages,
 	mistakeObservations,
+	quickAsks,
 	sessions,
 	stories,
 	storyContent,
@@ -505,7 +506,46 @@ for (const [agentName, sessionSeeds] of Object.entries(SESSION_SEEDS)) {
 	}
 }
 
+const QUICK_ASK_SEEDS: Record<
+	string,
+	{ name: string; deck: string; state: string; days?: number; model: string; prompt: string }[]
+> = {
+	Japanese: [
+		{
+			name: 'Example vocab N1',
+			deck: '新完全マスター語彙N1',
+			state: 'learn',
+			model: 'gemma4:e4b-mlx',
+			prompt: 'Give me an example sentence for these cards'
+		},
+		{
+			name: 'Example vocab N1 (new)',
+			deck: '新完全マスター語彙N1',
+			state: 'new',
+			model: 'gemma4:e4b-mlx',
+			prompt: 'Give me an example sentence for these cards'
+		}
+	]
+};
+
+await db.delete(quickAsks);
+await db.insert(quickAsks).values(
+	Object.entries(QUICK_ASK_SEEDS).flatMap(([agentName, seeds]) => {
+		const agent = agentsByName.get(agentName);
+		if (!agent) return [];
+		return seeds.map((seed) => ({
+			name: seed.name,
+			agentId: agent.id,
+			model: seed.model,
+			deck: seed.deck,
+			state: seed.state,
+			days: seed.days ?? null,
+			prompt: seed.prompt
+		}));
+	})
+);
+
 console.log(
-	'Seeded agents, tools, subjects, agent_tools, agent_subagents, mistake_observations, study_topics, stories, story_content, files, story_resources, sessions and messages.'
+	'Seeded agents, tools, subjects, agent_tools, agent_subagents, mistake_observations, study_topics, stories, story_content, files, story_resources, sessions, messages and quick_asks.'
 );
 db.$client.close();
