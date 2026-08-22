@@ -11,7 +11,7 @@ import * as v from 'valibot';
 export const getSession = query(v.pipe(v.string(), v.uuid()), async (sessionId) => {
 	const session = await db.query.sessions.findFirst({
 		where: { id: sessionId },
-		with: { agent: true }
+		with: { agent: { with: { subject: true } } }
 	});
 	if (!session) {
 		error(404, 'Session not found');

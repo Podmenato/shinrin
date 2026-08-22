@@ -7,13 +7,16 @@
 </script>
 
 {#if message.role === 'user'}
-	<div class="ml-auto max-w-[75%] rounded-2xl bg-primary px-4 py-2 text-primary-foreground">
+	<div
+		data-chat-message
+		class="ml-auto max-w-[75%] rounded-2xl bg-primary px-4 py-2 text-primary-foreground"
+	>
 		{message.content}
 	</div>
 {:else if message.role === 'assistant'}
 	<div class="flex flex-col gap-2">
 		{#if message.content}
-			<div class="prose prose-sm max-w-none dark:prose-invert">
+			<div data-chat-message class="prose prose-sm max-w-none dark:prose-invert">
 				<Markdown content={message.content} />
 			</div>
 		{/if}
