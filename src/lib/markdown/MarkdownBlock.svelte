@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { BlockNode } from './parser';
 	import MarkdownInline from './MarkdownInline.svelte';
+	import MarkdownBlock from './MarkdownBlock.svelte';
 
 	const { block }: { block: BlockNode } = $props();
 
@@ -32,13 +33,23 @@
 	{#if block.ordered}
 		<ol>
 			{#each block.items as item, i (i)}
-				<li><MarkdownInline nodes={item} /></li>
+				<li>
+					<MarkdownInline nodes={item.content} />
+					{#each item.children as child, j (j)}
+						<MarkdownBlock block={child} />
+					{/each}
+				</li>
 			{/each}
 		</ol>
 	{:else}
 		<ul>
 			{#each block.items as item, i (i)}
-				<li><MarkdownInline nodes={item} /></li>
+				<li>
+					<MarkdownInline nodes={item.content} />
+					{#each item.children as child, j (j)}
+						<MarkdownBlock block={child} />
+					{/each}
+				</li>
 			{/each}
 		</ul>
 	{/if}

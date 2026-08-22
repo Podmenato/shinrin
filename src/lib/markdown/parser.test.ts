@@ -81,7 +81,60 @@ describe('parseMarkdown', () => {
 			{
 				type: 'list',
 				ordered: false,
-				items: [[{ type: 'text', value: 'one' }], [{ type: 'text', value: 'two' }]]
+				items: [
+					{ content: [{ type: 'text', value: 'one' }], children: [] },
+					{ content: [{ type: 'text', value: 'two' }], children: [] }
+				]
+			}
+		]);
+	});
+
+	it('keeps a list together across blank lines between items instead of splitting it apart', () => {
+		expect(parseMarkdown('1. one\n\n2. two\n\n3. three')).toEqual([
+			{
+				type: 'list',
+				ordered: true,
+				items: [
+					{ content: [{ type: 'text', value: 'one' }], children: [] },
+					{ content: [{ type: 'text', value: 'two' }], children: [] },
+					{ content: [{ type: 'text', value: 'three' }], children: [] }
+				]
+			}
+		]);
+	});
+
+	it('parses an indented sub-list as nested children of the preceding item', () => {
+		expect(
+			parseMarkdown('1. term one\n    * detail a\n    * detail b\n\n2. term two\n    * detail c')
+		).toEqual([
+			{
+				type: 'list',
+				ordered: true,
+				items: [
+					{
+						content: [{ type: 'text', value: 'term one' }],
+						children: [
+							{
+								type: 'list',
+								ordered: false,
+								items: [
+									{ content: [{ type: 'text', value: 'detail a' }], children: [] },
+									{ content: [{ type: 'text', value: 'detail b' }], children: [] }
+								]
+							}
+						]
+					},
+					{
+						content: [{ type: 'text', value: 'term two' }],
+						children: [
+							{
+								type: 'list',
+								ordered: false,
+								items: [{ content: [{ type: 'text', value: 'detail c' }], children: [] }]
+							}
+						]
+					}
+				]
 			}
 		]);
 	});

@@ -9,12 +9,14 @@ export type InlineNode =
 	| { type: 'code'; value: string }
 	| { type: 'link'; href: string; text: string };
 
+export type ListItem = { content: InlineNode[]; children: BlockNode[] };
+
 export type BlockNode =
 	| { type: 'heading'; level: 1 | 2 | 3 | 4 | 5 | 6; children: InlineNode[] }
 	| { type: 'paragraph'; children: InlineNode[] }
 	| { type: 'codeblock'; lang?: string; code: string }
 	| { type: 'blockquote'; children: InlineNode[] }
-	| { type: 'list'; ordered: boolean; items: InlineNode[][] }
+	| { type: 'list'; ordered: boolean; items: ListItem[] }
 	| { type: 'table'; headers: InlineNode[][]; rows: InlineNode[][][] }
 	| { type: 'hr' };
 
@@ -157,6 +159,63 @@ export function parseInline(text: string): InlineNode[] {
 	return nodes;
 }
 
+const LIST_ITEM_PATTERN = /^([-*]|\d+\.)\s+(.*)$/;
+
+function lineIndent(line: string): number {
+	return line.length - line.trimStart().length;
+}
+
+/**
+ * Parses a run of list items all indented exactly `indent` columns, starting at line `start`.
+ * A blank line between items doesn't end the list — only a line at `indent` that isn't a list
+ * item (or a dedent) does. Lines indented further than an item's own marker width are parsed
+ * recursively as a nested list under that item, which is how e.g. `* Example: ...` sub-bullets
+ * under a numbered term end up attached to that term instead of spilling out as stray paragraph
+ * text. Returns `next`, the index of the first line the list didn't consume, for the caller to
+ * resume from; an empty `items` means line `start` wasn't actually a list item at this indent.
+ */
+function parseListBlock(
+	lines: string[],
+	start: number,
+	indent: number
+): { block: BlockNode & { type: 'list' }; next: number } {
+	let ordered: boolean | null = null;
+	const items: ListItem[] = [];
+	let i = start;
+
+	while (i < lines.length) {
+		let j = i;
+		while (j < lines.length && lines[j].trim() === '') j++;
+		if (j >= lines.length || lineIndent(lines[j]) !== indent) break;
+
+		const match = lines[j].slice(indent).match(LIST_ITEM_PATTERN);
+		if (!match) break;
+
+		const wantedOrdered = match[1] !== '-' && match[1] !== '*';
+		if (ordered === null) ordered = wantedOrdered;
+		else if (ordered !== wantedOrdered) break;
+
+		const markerWidth = lines[j].slice(indent).length - match[2].length;
+		const content = parseInline(match[2]);
+		i = j + 1;
+
+		const children: BlockNode[] = [];
+		let k = i;
+		while (k < lines.length && lines[k].trim() === '') k++;
+		if (k < lines.length && lineIndent(lines[k]) >= indent + markerWidth) {
+			const nested = parseListBlock(lines, k, indent + markerWidth);
+			if (nested.block.items.length > 0) {
+				children.push(nested.block);
+				i = nested.next;
+			}
+		}
+
+		items.push({ content, children });
+	}
+
+	return { block: { type: 'list', ordered: ordered ?? false, items }, next: i };
+}
+
 /** Parses a constrained markdown subset (headers, emphasis, code, links, lists, blockquotes, tables) into block nodes. */
 export function parseMarkdown(source: string): BlockNode[] {
 	const codeBlocks: { lang?: string; code: string }[] = [];
@@ -168,8 +227,6 @@ export function parseMarkdown(source: string): BlockNode[] {
 
 	const lines = withPlaceholders.split('\n');
 	const blocks: BlockNode[] = [];
-	let listType: 'ul' | 'ol' | null = null;
-	let listItems: InlineNode[][] = [];
 	let paragraphLines: string[] = [];
 
 	function flushParagraph() {
@@ -179,20 +236,11 @@ export function parseMarkdown(source: string): BlockNode[] {
 		}
 	}
 
-	function flushList() {
-		if (listType) {
-			blocks.push({ type: 'list', ordered: listType === 'ol', items: listItems });
-			listType = null;
-			listItems = [];
-		}
-	}
-
 	for (let i = 0; i < lines.length; i++) {
 		const rawLine = lines[i];
 
 		if (rawLine.includes('|') && i + 1 < lines.length && isTableSeparatorRow(lines[i + 1])) {
 			flushParagraph();
-			flushList();
 			const headers = splitTableRow(rawLine).map((cell) => parseInline(cell));
 			const rows: InlineNode[][][] = [];
 			i += 2;
@@ -209,7 +257,6 @@ export function parseMarkdown(source: string): BlockNode[] {
 		// match the unordered-list regex below.
 		if (/^([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(rawLine.trim())) {
 			flushParagraph();
-			flushList();
 			blocks.push({ type: 'hr' });
 			continue;
 		}
@@ -217,7 +264,6 @@ export function parseMarkdown(source: string): BlockNode[] {
 		const placeholderMatch = rawLine.match(/^ (\d+) $/);
 		if (placeholderMatch) {
 			flushParagraph();
-			flushList();
 			const block = codeBlocks[Number(placeholderMatch[1])];
 			blocks.push({ type: 'codeblock', lang: block.lang, code: block.code });
 			continue;
@@ -226,7 +272,6 @@ export function parseMarkdown(source: string): BlockNode[] {
 		const headerMatch = rawLine.match(/^(#{1,6})\s+(.*)$/);
 		if (headerMatch) {
 			flushParagraph();
-			flushList();
 			blocks.push({
 				type: 'heading',
 				level: headerMatch[1].length as 1 | 2 | 3 | 4 | 5 | 6,
@@ -238,27 +283,20 @@ export function parseMarkdown(source: string): BlockNode[] {
 		const quoteMatch = rawLine.match(/^>\s?(.*)$/);
 		if (quoteMatch) {
 			flushParagraph();
-			flushList();
 			blocks.push({ type: 'blockquote', children: parseInline(quoteMatch[1]) });
 			continue;
 		}
 
-		const unorderedMatch = rawLine.match(/^[-*]\s+(.*)$/);
-		const orderedMatch = rawLine.match(/^\d+\.\s+(.*)$/);
-		if (unorderedMatch || orderedMatch) {
+		if (LIST_ITEM_PATTERN.test(rawLine)) {
 			flushParagraph();
-			const wantedType = unorderedMatch ? 'ul' : 'ol';
-			if (listType !== wantedType) {
-				flushList();
-				listType = wantedType;
-			}
-			listItems.push(parseInline((unorderedMatch ?? orderedMatch)![1]));
+			const { block, next } = parseListBlock(lines, i, 0);
+			blocks.push(block);
+			i = next - 1;
 			continue;
 		}
 
 		if (rawLine.trim() === '') {
 			flushParagraph();
-			flushList();
 			continue;
 		}
 
@@ -266,7 +304,6 @@ export function parseMarkdown(source: string): BlockNode[] {
 	}
 
 	flushParagraph();
-	flushList();
 
 	return blocks;
 }
