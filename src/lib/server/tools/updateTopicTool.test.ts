@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index';
-import { subjects, studyTopics } from '../db/schema';
+import { agents, subjects, studyTopics } from '../db/schema';
 import { CreateTopicTool } from './createTopicTool';
 import { UpdateTopicTool } from './updateTopicTool';
 import { ToolError } from './tool';
@@ -9,7 +9,17 @@ import { ToolError } from './tool';
 afterEach(async () => {
 	await db.delete(studyTopics);
 	await db.delete(subjects);
+	await db.delete(agents);
 });
+
+async function seedSubject() {
+	const [agent] = await db.insert(agents).values({ name: 'Test Agent' }).returning();
+	const [subject] = await db
+		.insert(subjects)
+		.values({ name: 'Japanese', autoAddAgentId: agent.id })
+		.returning();
+	return subject;
+}
 
 describe('UpdateTopicTool', () => {
 	it('throws when the topic id does not exist', async () => {
@@ -18,7 +28,7 @@ describe('UpdateTopicTool', () => {
 	});
 
 	it('appends a timestamped note to an existing topic', async () => {
-		const [subject] = await db.insert(subjects).values({ name: 'Japanese' }).returning();
+		const subject = await seedSubject();
 		await new CreateTopicTool(subject.id).execute({ topic: 't', status: 'introduced' });
 		const [existing] = await db
 			.select()

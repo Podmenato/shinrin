@@ -7,7 +7,6 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { toast } from 'svelte-sonner';
 
 	// TODO: context actions will be redone, review if this still makes sense after
@@ -24,15 +23,14 @@
 
 	let {
 		open = $bindable(false),
-		fields,
-		generating = false
+		fields
 	}: {
 		open: boolean;
 		fields: CardFields;
-		generating?: boolean;
 	} = $props();
 
-	const decks = $derived(await getDecks());
+	const decksQuery = getDecks();
+	const decks = $derived(decksQuery.current ?? []);
 	let submitting = $state(false);
 
 	const deckSlots = [
@@ -82,13 +80,6 @@
 		</Dialog.Header>
 
 		<div class="flex flex-col gap-4">
-			{#if generating}
-				<div class="flex items-center gap-2 text-sm text-muted-foreground">
-					<Spinner class="size-4" />
-					Generating...
-				</div>
-			{/if}
-
 			<Field.Field>
 				<Field.Label for="sentence">Sentence</Field.Label>
 				<Textarea id="sentence" class="min-h-16" bind:value={fields.sentence} />
@@ -114,6 +105,12 @@
 				<Input id="tags" placeholder="comma, separated" bind:value={fields.tagsInput} />
 			</Field.Field>
 
+			{#if decksQuery.error}
+				<p class="text-sm text-destructive">
+					Couldn't reach Anki — make sure it's running with AnkiConnect installed.
+				</p>
+			{/if}
+
 			{#each deckSlots as slot (slot.key)}
 				<Field.Field>
 					<Field.Label for={slot.key}>{slot.label}</Field.Label>
@@ -132,7 +129,7 @@
 		</div>
 
 		<Dialog.Footer>
-			<Button onclick={submit} isLoading={submitting} disabled={generating}>Add to Anki</Button>
+			<Button onclick={submit} isLoading={submitting}>Add to Anki</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

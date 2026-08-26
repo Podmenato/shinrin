@@ -25,6 +25,12 @@ export const subjects = sqliteTable('subjects', {
 	id: generateUUID(),
 	name: text().notNull().unique(),
 	description: text(),
+	readingDeck: text('reading_deck'),
+	productionDeck: text('production_deck'),
+	listeningDeck: text('listening_deck'),
+	autoAddAgentId: text('auto_add_agent_id')
+		.notNull()
+		.references((): AnySQLiteColumn => agents.id),
 	createdAt: createdAt(),
 	updatedAt: updatedAt()
 });
@@ -254,7 +260,12 @@ export const relations = defineRelations(schemaTables, (r) => ({
 			from: r.subjects.id,
 			to: r.mistakeObservations.subjectId
 		}),
-		storyContent: r.many.storyContent({ from: r.subjects.id, to: r.storyContent.subjectId })
+		storyContent: r.many.storyContent({ from: r.subjects.id, to: r.storyContent.subjectId }),
+		autoAddAgent: r.one.agents({
+			from: r.subjects.autoAddAgentId,
+			to: r.agents.id,
+			optional: false
+		})
 	},
 	agents: {
 		subject: r.one.subjects({ from: r.agents.subjectId, to: r.subjects.id }),

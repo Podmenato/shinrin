@@ -1,7 +1,14 @@
 import { query, command, form } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { db } from '#lib/server/db/index.js';
-import { agentSubagents, agentTools, agents, sessions, tools } from '#lib/server/db/schema.js';
+import {
+	agentSubagents,
+	agentTools,
+	agents,
+	sessions,
+	subjects,
+	tools
+} from '#lib/server/db/schema.js';
 import { insertSessionSchema } from '#lib/server/db/schemas.js';
 import { and, desc, eq, inArray, isNull, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
@@ -47,6 +54,16 @@ export const getAgentById = query(v.pipe(v.string(), v.uuid()), async (id) => {
 		subagentIds: assignedSubagents.map((s) => s.subagentId)
 	};
 });
+
+/** Returns the subjects (id + name) that have this agent set as their automatic-add agent. */
+async function dependentSubjects(agentId: string) {
+	return db
+		.select({ id: subjects.id, name: subjects.name })
+		.from(subjects)
+		.where(eq(subjects.autoAddAgentId, agentId));
+}
+
+export const getDependentSubjects = query(v.pipe(v.string(), v.uuid()), dependentSubjects);
 
 /**
  * Walks the `agent_subagents` edge list backward from `agentId` to find every agent that can
@@ -267,5 +284,13 @@ export const saveAgent = form(
 
 /** Soft-deletes an agent; its sessions, memories, and other history are left intact. */
 export const deleteAgent = command(v.pipe(v.string(), v.uuid()), async (id) => {
+	const dependent = await dependentSubjects(id);
+	if (dependent.length > 0) {
+		error(
+			400,
+			`This agent is assigned to ${dependent.map((s) => `"${s.name}"`).join(', ')} — change that subject's setting before deleting this agent.`
+		);
+	}
+
 	await db.update(agents).set({ deletedAt: new Date() }).where(eq(agents.id, id));
 });

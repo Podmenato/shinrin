@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index';
-import { subjects, stories, storyContent } from '../db/schema';
+import { agents, subjects, stories, storyContent } from '../db/schema';
 import { SaveStoryTool } from './saveStoryTool';
 import { ToolError } from './tool';
 
@@ -9,7 +9,17 @@ afterEach(async () => {
 	await db.delete(storyContent);
 	await db.delete(stories);
 	await db.delete(subjects);
+	await db.delete(agents);
 });
+
+async function seedSubject() {
+	const [agent] = await db.insert(agents).values({ name: 'Test Agent' }).returning();
+	const [subject] = await db
+		.insert(subjects)
+		.values({ name: 'Japanese', autoAddAgentId: agent.id })
+		.returning();
+	return subject;
+}
 
 describe('SaveStoryTool', () => {
 	it('throws for an invalid mode', async () => {
@@ -43,7 +53,7 @@ describe('SaveStoryTool', () => {
 		});
 
 		it('creates a story with content for the calling subject', async () => {
-			const [subject] = await db.insert(subjects).values({ name: 'Japanese' }).returning();
+			const subject = await seedSubject();
 			const tool = new SaveStoryTool(subject.id);
 
 			const result = await tool.execute({
@@ -68,14 +78,14 @@ describe('SaveStoryTool', () => {
 		});
 
 		it('requires content', async () => {
-			const [subject] = await db.insert(subjects).values({ name: 'Japanese' }).returning();
+			const subject = await seedSubject();
 			const [story] = await db.insert(stories).values({ title: 't' }).returning();
 			const tool = new SaveStoryTool(subject.id);
 			await expect(tool.execute({ mode: 'update', id: story.id })).rejects.toThrow(ToolError);
 		});
 
 		it('throws when the story id does not exist', async () => {
-			const [subject] = await db.insert(subjects).values({ name: 'Japanese' }).returning();
+			const subject = await seedSubject();
 			const tool = new SaveStoryTool(subject.id);
 			await expect(
 				tool.execute({ mode: 'update', id: 'missing', content: 'body' })
@@ -83,7 +93,7 @@ describe('SaveStoryTool', () => {
 		});
 
 		it('upserts content for the calling subject, clearing stale', async () => {
-			const [subject] = await db.insert(subjects).values({ name: 'Japanese' }).returning();
+			const subject = await seedSubject();
 			const [story] = await db.insert(stories).values({ title: 't' }).returning();
 			await db
 				.insert(storyContent)

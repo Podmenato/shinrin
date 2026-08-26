@@ -1,17 +1,22 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index';
-import { subjects, studyTopics } from '../db/schema';
+import { agents, subjects, studyTopics } from '../db/schema';
 import { CreateTopicTool } from './createTopicTool';
 import { ToolError } from './tool';
 
 afterEach(async () => {
 	await db.delete(studyTopics);
 	await db.delete(subjects);
+	await db.delete(agents);
 });
 
 async function seedSubject() {
-	const [subject] = await db.insert(subjects).values({ name: 'Japanese' }).returning();
+	const [agent] = await db.insert(agents).values({ name: 'Test Agent' }).returning();
+	const [subject] = await db
+		.insert(subjects)
+		.values({ name: 'Japanese', autoAddAgentId: agent.id })
+		.returning();
 	return subject;
 }
 

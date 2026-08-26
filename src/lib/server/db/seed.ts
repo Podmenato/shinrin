@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { eq } from 'drizzle-orm';
 import {
 	agentSubagents,
 	agentTools,
@@ -101,18 +102,80 @@ const ANKI_SUBAGENT_DESCRIPTION =
 	'Call it with one clear, self-contained natural-language instruction describing exactly what to do, including deck names, IDs, and full content — it has no memory of this conversation. ' +
 	'Returns only the requested data or a short confirmation; it will not ask clarifying questions back.';
 
+/**
+ * Drives the "Add to Anki (AI)" context-menu action's automatic path (see subjects'
+ * `autoAddAgentId`) — a single structured-output turn, not a conversation, so unlike the
+ * language-tutor agents it has no tools and never talks to a user directly. Baking the target
+ * language directly into the prompt (rather than passing it per-call) is deliberate now that
+ * each of these agents is owned by exactly one subject via `subjectId` — earlier drafts of this
+ * feature used one subject-less agent for every language, which turned out to be a shape nobody
+ * had actually agreed to; a dedicated agent per subject sidesteps that and can be edited per
+ * language independently.
+ */
+function vocabExtractorSystemPrompt(language: string): string {
+	return (
+		`You generate a single Anki sentence card in ${language}, grounded in a snippet of chat context. Another agent calls you and uses your reply programmatically — you never talk to a user directly.\n` +
+		'\n' +
+		'You will be given the full chat message an excerpt was taken from, and the selected excerpt itself.\n' +
+		`Write ONE natural example sentence in ${language} that uses or relates to the excerpt, plus its English translation.\n` +
+		'\n' +
+		'Reply with ONLY a single JSON object, no prose before or after it, no markdown code fence, matching exactly this shape:\n' +
+		'{"sentence": string, "translation": string, "reading": string, "notes": string}\n' +
+		'  sentence — the example sentence.\n' +
+		'  translation — its English translation.\n' +
+		`  reading — furigana or pinyin reading of the sentence. Empty string if ${language} uses no such reading.\n` +
+		'  notes — a brief grammar or nuance note. Empty string if there is nothing worth adding.'
+	);
+}
+
+const SUBJECT_SEEDS = [
+	{ name: 'Japanese', description: 'Japanese language study.' },
+	{ name: 'English', description: 'English language study.' },
+	{ name: 'Mandarin', description: 'Mandarin Chinese language study.' },
+	{ name: 'German', description: 'German language study.' }
+];
+
+function vocabExtractorAgentName(subjectName: string): string {
+	return `${subjectName} Vocab Extractor`;
+}
+
+// subjects.autoAddAgentId is NOT NULL, and agents.subjectId is nullable — so the extractor
+// agents are inserted first (subjectId left unset, since the subject doesn't exist yet), then the
+// subjects can reference them, then the agents are updated to point back at their subject. Breaks
+// what would otherwise be a same-row circular dependency between the two tables.
+await db
+	.insert(agents)
+	.values(
+		SUBJECT_SEEDS.map((s) => ({
+			name: vocabExtractorAgentName(s.name),
+			systemPrompt: vocabExtractorSystemPrompt(s.name)
+		}))
+	)
+	.onConflictDoNothing();
+
+const extractorAgentsByName = new Map((await db.select().from(agents)).map((a) => [a.name, a]));
+
 await db
 	.insert(subjects)
-	.values([
-		{ name: 'Japanese', description: 'Japanese language study.' },
-		{ name: 'English', description: 'English language study.' },
-		{ name: 'Mandarin', description: 'Mandarin Chinese language study.' },
-		{ name: 'German', description: 'German language study.' }
-	])
+	.values(
+		SUBJECT_SEEDS.map((s) => ({
+			name: s.name,
+			description: s.description,
+			autoAddAgentId: extractorAgentsByName.get(vocabExtractorAgentName(s.name))!.id
+		}))
+	)
 	.onConflictDoNothing();
 
 const allSubjects = await db.select().from(subjects);
 const subjectsByName = new Map(allSubjects.map((s) => [s.name, s]));
+
+for (const s of SUBJECT_SEEDS) {
+	const extractorAgent = extractorAgentsByName.get(vocabExtractorAgentName(s.name));
+	const subject = subjectsByName.get(s.name);
+	if (extractorAgent && subject && extractorAgent.subjectId !== subject.id) {
+		await db.update(agents).set({ subjectId: subject.id }).where(eq(agents.id, extractorAgent.id));
+	}
+}
 
 await db
 	.insert(agents)

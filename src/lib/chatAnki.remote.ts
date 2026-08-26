@@ -5,15 +5,10 @@ import { db } from '#lib/server/db/index.js';
 import { Agent } from '#lib/server/agent.js';
 import { OllamaProvider } from '#lib/server/modelProviders/ollamaProvider.js';
 import { AddSentenceNoteTool } from '#lib/server/tools/anki/addSentenceNoteTool.js';
+import { ankiRequest } from '#lib/server/tools/anki/ankiClient.js';
 import type { JsonValue } from '#lib/json.js';
 
 // TODO: context actions will be redone, review if this still makes sense after
-const generateSentenceCardSchema = v.object({
-	sessionId: v.pipe(v.string(), v.uuid()),
-	selectedText: v.pipe(v.string(), v.trim(), v.nonEmpty()),
-	messageContent: v.string()
-});
-
 const generatedCardSchema = v.object({
 	sentence: v.pipe(v.string(), v.nonEmpty()),
 	translation: v.pipe(v.string(), v.nonEmpty()),
@@ -36,14 +31,26 @@ function parseGeneratedCard(reply: string) {
 }
 
 /**
- * Generates sentence-card fields from a chat-message text selection by running the session's own
- * agent as a hidden nested session (same mechanism `SubagentTool` uses for subagent calls) —
- * kept out of the visible transcript rather than injected as a real turn in the current session.
- * Which agent/model handles this is meant to become user-configurable later; for now it's always
- * whatever agent the calling session is already running.
+ * `createDeck` is idempotent ("will not overwrite a deck that exists with the same name"), so
+ * this is safe to call unconditionally rather than checking existence first. Only used by the
+ * automatic path below — the manual dialog's deck pickers only ever offer decks that already
+ * exist in Anki, so there's nothing to lazily create there.
  */
-export const generateSentenceCard = command(
-	generateSentenceCardSchema,
+async function ensureDecksExist(decks: string[], signal: AbortSignal) {
+	await Promise.all(decks.map((deck) => ankiRequest('createDeck', { deck }, signal)));
+}
+
+const autoAddSchema = v.object({
+	sessionId: v.pipe(v.string(), v.uuid()),
+	selectedText: v.pipe(v.string(), v.trim(), v.nonEmpty()),
+	messageContent: v.string()
+});
+
+/**
+ * Quickly adds card to Anki using the subject's decks and generating a sentence using AI.
+ */
+export const autoAddSentenceCard = command(
+	autoAddSchema,
 	async ({ sessionId, selectedText, messageContent }) => {
 		const session = await db.query.sessions.findFirst({
 			where: { id: sessionId },
@@ -53,36 +60,50 @@ export const generateSentenceCard = command(
 			error(404, 'Session not found');
 		}
 
-		const subjectName = session.agent.subject?.name;
-		if (!subjectName) {
+		const subject = session.agent.subject;
+		if (!subject) {
+			error(400, 'This agent has no subject, so there is no automatic-add configuration to use.');
+		}
+
+		const decks = [subject.readingDeck, subject.productionDeck, subject.listeningDeck];
+		if (decks.some((deck) => !deck)) {
 			error(
 				400,
-				'This agent has no subject, so AI sentence generation has no target language to use.'
+				`"${subject.name}" has no decks configured yet — set them in the subject's settings first.`
 			);
 		}
 
+		const signal = new AbortController().signal;
 		const provider = new OllamaProvider(session.model);
 		const agent = await Agent.create(
-			session.agentId,
-			'Sentence card generation',
+			subject.autoAddAgentId,
+			'Automatic sentence card',
 			session.model,
 			provider,
 			sessionId
 		);
 
-		const prompt =
-			`Generate a single Anki sentence card grounded in the excerpt below. Target language: ${subjectName}.\n` +
-			'Reply with ONLY a single JSON object, no prose before or after it, no markdown code fence, matching exactly:\n' +
-			'{"sentence": string, "translation": string, "reading": string, "notes": string}\n' +
-			'  sentence — one natural example sentence in the target language, using or relating to the excerpt.\n' +
-			'  translation — its English translation.\n' +
-			'  reading — furigana or pinyin reading of the sentence. Empty string if the language uses no such reading.\n' +
-			'  notes — a brief grammar or nuance note. Empty string if there is nothing worth adding.\n\n' +
-			`Message:\n"""${messageContent}"""\n\n` +
-			`Selected excerpt:\n"""${selectedText}"""`;
+		const prompt = `Message:\n"""${messageContent}"""\n\nSelected excerpt:\n"""${selectedText}"""`;
+		const reply = await agent.run(prompt, undefined, signal);
+		const card = parseGeneratedCard(reply);
 
-		const reply = await agent.run(prompt, undefined, new AbortController().signal);
-		return parseGeneratedCard(reply);
+		await ensureDecksExist(decks as string[], signal);
+
+		const result = await new AddSentenceNoteTool().execute(
+			{
+				decks,
+				sentence: card.sentence,
+				translation: card.translation,
+				reading: card.reading,
+				notes: card.notes,
+				tags: []
+			} as unknown as Record<string, JsonValue>,
+			signal
+		);
+		return JSON.parse(result) as {
+			noteId: number;
+			cards: Record<string, { deck: string; cardId: number }>;
+		};
 	}
 );
 
@@ -95,7 +116,7 @@ const addSentenceCardSchema = v.object({
 	tags: v.optional(v.array(v.string()), [])
 });
 
-/** Writes a sentence note to Anki — the same shape/write path as the `add_sentence_note` agent tool. */
+/** Writes a sentence note to Anki. */
 export const addSentenceCard = command(addSentenceCardSchema, async (args) => {
 	const signal = new AbortController().signal;
 	const result = await new AddSentenceNoteTool().execute(

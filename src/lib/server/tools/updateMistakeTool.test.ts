@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index';
-import { subjects, mistakeObservations } from '../db/schema';
+import { agents, subjects, mistakeObservations } from '../db/schema';
 import { CreateMistakeTool } from './createMistakeTool';
 import { UpdateMistakeTool } from './updateMistakeTool';
 import { ToolError } from './tool';
@@ -9,7 +9,17 @@ import { ToolError } from './tool';
 afterEach(async () => {
 	await db.delete(mistakeObservations);
 	await db.delete(subjects);
+	await db.delete(agents);
 });
+
+async function seedSubject() {
+	const [agent] = await db.insert(agents).values({ name: 'Test Agent' }).returning();
+	const [subject] = await db
+		.insert(subjects)
+		.values({ name: 'Japanese', autoAddAgentId: agent.id })
+		.returning();
+	return subject;
+}
 
 describe('UpdateMistakeTool', () => {
 	it('throws when the mistake id does not exist', async () => {
@@ -18,7 +28,7 @@ describe('UpdateMistakeTool', () => {
 	});
 
 	it('appends a timestamped note to an existing mistake', async () => {
-		const [subject] = await db.insert(subjects).values({ name: 'Japanese' }).returning();
+		const subject = await seedSubject();
 		await new CreateMistakeTool(subject.id).execute({ title: 't', note: 'initial note' });
 		const [existing] = await db
 			.select()
