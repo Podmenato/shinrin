@@ -203,7 +203,7 @@ function parseListBlock(
 		let k = i;
 		while (k < lines.length && lines[k].trim() === '') k++;
 		if (k < lines.length && lineIndent(lines[k]) >= indent + markerWidth) {
-			const nested = parseListBlock(lines, k, indent + markerWidth);
+			const nested = parseListBlock(lines, k, lineIndent(lines[k]));
 			if (nested.block.items.length > 0) {
 				children.push(nested.block);
 				i = nested.next;
