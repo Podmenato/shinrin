@@ -16,6 +16,7 @@
 		"dev-trace": "LOG_LEVEL=trace tsx scripts/dev.ts",
 		"mcp:server": "tsx scripts/mcp-server.ts",
 		"build": "vite build",
+		"prepare-prod": "pnpm db:prod:generate && pnpm db:prod:migrate && pnpm build",
 		"start": "NODE_ENV=production node build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''; git config core.hooksPath .githooks",

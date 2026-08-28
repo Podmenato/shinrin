@@ -924,8 +924,9 @@ subjectId`. Checked SvelteKit's actual docs and the PR/issue that
 
 ## SvelteKit 3
 
-Running `@sveltejs/kit@3.0.0-next.23` + `@sveltejs/adapter-node@6.0.0-next.10`
-(bumped 2026-08 from `next.8`/`next.3`) — a deliberate, early jump onto the
+Running `@sveltejs/kit@3.0.0-next.25` + `@sveltejs/adapter-node@6.0.0-next.10`
+(kit bumped 2026-08-28 from `next.23`; both originally bumped 2026-08 from
+`next.8`/`next.3`) — a deliberate, early jump onto the
 prerelease line, not an accident. Both are pinned to an **exact** version in
 `package.json` (no `^`) on purpose: bumping across `next.*` releases should stay a
 one-at-a-time, deliberate action, not something a routine `pnpm install` does
@@ -1076,7 +1077,13 @@ tasks/lib-alias.ts` — should have been run in the first place instead of
   runtime, never exported. There is no supported way to read "a boundary is currently
   failed" from app code (`page.error` doesn't cover this case either, see above) — that's
   why `errorState` exists as a hand-rolled signal instead of something read off an
-  existing store.
+  existing store. Re-checked directly against the GitHub issue/PR at the
+  `next.23`→`next.25` bump (2026-08-28): both #16207 and #16227 are still open,
+  and neither release's changelog contains an entry closing them — a nearby fix
+  landed in `next.24` (#16526, "render the nearest `+error.svelte` at the depth
+  it occupies when an error is thrown during rendering") but that's about
+  depth-selection for a render-time error, not the reused-boundary-on-navigation
+  bug this workaround targets — so the workaround stays.
 - **IDE may falsely report `Cannot use \`await\` in deriveds... unless
   \`experimental.async\` is true`** (svelte.dev/e/experimental_async) even though the
   option is set and the real compiler (Vite dev server, `pnpm build`, `pnpm run
