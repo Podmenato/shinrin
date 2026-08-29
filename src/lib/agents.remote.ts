@@ -178,6 +178,7 @@ export const deleteSession = command(v.pipe(v.string(), v.uuid()), async (id) =>
 	await getAllSessions().refresh();
 });
 
+// TODO: the default could be refactored to not use empty string
 /** Creates or updates an agent's name, system prompt, subject, and assigned tools. */
 export const saveAgent = form(
 	v.object({

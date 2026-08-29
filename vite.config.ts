@@ -4,10 +4,11 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
 import adapter from '@sveltejs/adapter-node';
+import { shinrinOrigin } from '#lib/server/env.js';
 
 const { version } = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
 	// Compile-time constant instead of importing package.json in app code —
 	// keeps the rest of package.json (deps, scripts) out of the client bundle.
 	define: {
@@ -27,7 +28,8 @@ export default defineConfig({
 			adapter: adapter(),
 			experimental: {
 				remoteFunctions: true
-			}
+			},
+			paths: mode === 'production' ? { origin: shinrinOrigin() } : undefined
 		})
 	],
 	test: {
@@ -59,4 +61,4 @@ export default defineConfig({
 			}
 		]
 	}
-});
+}));

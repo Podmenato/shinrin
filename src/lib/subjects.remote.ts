@@ -1,8 +1,9 @@
 import { query, form } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { db } from '#lib/server/db/index.js';
-import { subjects } from '#lib/server/db/schema.js';
+import { agents, subjects } from '#lib/server/db/schema.js';
 import { ankiRequest } from '#lib/server/tools/anki/ankiClient.js';
+import { getAgents } from '#lib/agents.remote.js';
 import { eq, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
 
@@ -22,8 +23,27 @@ export const getSubjectById = query(v.pipe(v.string(), v.uuid()), async (id) => 
 	return subject;
 });
 
+const DECK_SLOT_NAMES = { R: 'Reading', P: 'Production', L: 'Listening' } as const;
+
+// "::" is Anki's own deck-hierarchy separator — this groups the three generated
+// decks under a collapsible {subjectName} parent in the deck browser.
 function defaultDeckName(subjectName: string, slot: 'R' | 'P' | 'L'): string {
-	return `${subjectName} generated (${slot})`;
+	return `${subjectName}::${DECK_SLOT_NAMES[slot]}`;
+}
+
+function defaultAutoAddSystemPrompt(subjectName: string): string {
+	return (
+		'You are a card-completion tool. You generate a single Anki sentence card from a chat excerpt. Given a chat message and a ' +
+		'text excerpt the user selected from it, produce one JSON object — nothing else, no prose, ' +
+		'no markdown fence — matching exactly:\n' +
+		'{"sentence": "...", "translation": "...", "reading": "", "notes": ""}\n' +
+		`  sentence    — the ${subjectName} sentence, usually the excerpt itself verbatim; adjust it only if it's a broken fragment.\n` +
+		'  translation — its English translation. Almost always the one field you actually need to fill in.\n' +
+		`  reading     — a reading aid (furigana, pinyin, etc.) if ${subjectName}'s script needs one; otherwise "".\n` +
+		'  notes       — a short grammar/usage note, only when something genuinely needs flagging; otherwise "".\n' +
+		'\n' +
+		'Your reply is parsed directly as this JSON and used to create the card — it is never shown to the user as a message.'
+	);
 }
 
 /**
@@ -62,7 +82,7 @@ export const saveSubject = form(
 		readingDeck: v.string(),
 		productionDeck: v.string(),
 		listeningDeck: v.string(),
-		autoAddAgentId: v.pipe(v.string(), v.uuid())
+		autoAddAgentId: v.string()
 	}),
 	async ({
 		id,
@@ -73,6 +93,10 @@ export const saveSubject = form(
 		listeningDeck: listeningDeckInput,
 		autoAddAgentId
 	}) => {
+		if (id && autoAddAgentId === '') {
+			error(400, 'Select an automatic-add agent');
+		}
+
 		const signal = new AbortController().signal;
 		const deckWarnings: string[] = [];
 
@@ -87,22 +111,41 @@ export const saveSubject = form(
 			description: description.trim() === '' ? null : description,
 			readingDeck,
 			productionDeck,
-			listeningDeck,
-			autoAddAgentId
+			listeningDeck
 		};
 
 		let subject;
 		if (id) {
 			[subject] = await db
 				.update(subjects)
-				.set({ ...values, updatedAt: new Date() })
+				.set({ ...values, autoAddAgentId, updatedAt: new Date() })
 				.where(eq(subjects.id, id))
 				.returning();
 			if (!subject) {
 				error(404, 'Subject not found');
 			}
 		} else {
-			[subject] = await db.insert(subjects).values(values).returning();
+			let resolvedAgentId = autoAddAgentId;
+			if (resolvedAgentId === '') {
+				const [defaultAgent] = await db
+					.insert(agents)
+					.values({ name: `${name} tutor`, systemPrompt: defaultAutoAddSystemPrompt(name) })
+					.returning();
+				resolvedAgentId = defaultAgent.id;
+				await getAgents().refresh();
+			}
+
+			[subject] = await db
+				.insert(subjects)
+				.values({ ...values, autoAddAgentId: resolvedAgentId })
+				.returning();
+
+			if (autoAddAgentId === '') {
+				await db
+					.update(agents)
+					.set({ subjectId: subject.id, updatedAt: new Date() })
+					.where(eq(agents.id, resolvedAgentId));
+			}
 		}
 
 		await getSubjects().refresh();

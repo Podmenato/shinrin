@@ -26,9 +26,11 @@
 	let listeningDeck = $derived(subject?.listeningDeck ?? '');
 	let autoAddAgentId = $derived(subject?.autoAddAgentId ?? '');
 
+	const DECK_SLOT_NAMES = { R: 'Reading', P: 'Production', L: 'Listening' } as const;
+
 	function buildOptionLabel(slot: 'R' | 'P' | 'L') {
 		const subjectName = name.trim() || 'Subject';
-		return `Auto-generate (${subjectName} generated (${slot}))`;
+		return `Auto-generate (${subjectName}::${DECK_SLOT_NAMES[slot]})`;
 	}
 
 	function getDeckTriggerContent(value: string, slot: 'R' | 'P' | 'L') {
@@ -40,7 +42,9 @@
 	const listeningDeckTriggerContent = $derived(getDeckTriggerContent(listeningDeck, 'L'));
 
 	const agentTriggerContent = $derived(
-		allAgents.find((a) => a.id === autoAddAgentId)?.name ?? 'Select an agent'
+		autoAddAgentId === ''
+			? 'Auto-generate a new agent'
+			: (allAgents.find((a) => a.id === autoAddAgentId)?.name ?? 'Select an agent')
 	);
 
 	const subjectForm = $derived(subject ? saveSubject.for(subject.id) : saveSubject);
@@ -178,6 +182,9 @@
 						{agentTriggerContent}
 					</Select.Trigger>
 					<Select.Content>
+						{#if !subject}
+							<Select.Item value="" label="Auto-generate a new agent" />
+						{/if}
 						{#each allAgents as agent (agent.id)}
 							<Select.Item value={agent.id} label={agent.name} />
 						{/each}

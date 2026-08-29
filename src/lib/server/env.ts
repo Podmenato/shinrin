@@ -27,3 +27,12 @@ export function currentMode(): Mode {
 export function dbPath(mode: Mode): string {
 	return mode === 'production' ? '.data/prod.sqlite3' : '.data/dev.sqlite3';
 }
+
+// Production server binding, read from .env.production.
+export function shinrinPort(): string {
+	return process.env.SHINRIN_PORT ?? '4287';
+}
+
+export function shinrinOrigin(): string {
+	return process.env.SHINRIN_ORIGIN ?? `http://localhost:${shinrinPort()}`;
+}

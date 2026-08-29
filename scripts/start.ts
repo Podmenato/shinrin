@@ -6,7 +6,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { dbPath, loadEnv } from '#lib/server/env.js';
+import { dbPath, loadEnv, shinrinPort } from '#lib/server/env.js';
 
 loadEnv('production');
 
@@ -33,8 +33,20 @@ if (deployedVersion !== version) {
 	// not whatever was installed for the previous version.
 	run('pnpm', ['install']);
 	run('drizzle-kit', ['migrate', '--config', 'drizzle.config.prod.ts']);
+	// Bakes SHINRIN_ORIGIN (vite.config.ts's `paths.origin`) into the built
+	// server — see the shinrinOrigin() comment in env.ts. Since this whole
+	// block only runs on a version change, editing .env.production's
+	// SHINRIN_ORIGIN alone won't take effect until the next version bump.
+	// To pick it up sooner, delete .data/VERSION (not `pnpm build` by itself
+	// — that skips loadEnv('production') above, so .env.production wouldn't
+	// even be read) so this block runs again on the next `pnpm start`.
 	run('vite', ['build']);
 	writeFileSync(versionFile, version);
 }
+
+// Unlike ORIGIN, adapter-node reads PORT fresh from the environment on every
+// launch — no rebuild needed for it to take effect. HOST is left alone —
+// adapter-node's own default is already 0.0.0.0.
+process.env.PORT = shinrinPort();
 
 run('node', ['build']);
