@@ -1,10 +1,18 @@
+import { readFileSync } from 'node:fs';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
 import adapter from '@sveltejs/adapter-node';
 
+const { version } = JSON.parse(readFileSync('./package.json', 'utf-8'));
+
 export default defineConfig({
+	// Compile-time constant instead of importing package.json in app code —
+	// keeps the rest of package.json (deps, scripts) out of the client bundle.
+	define: {
+		__APP_VERSION__: JSON.stringify(version)
+	},
 	plugins: [
 		tailwindcss(),
 		sveltekit({

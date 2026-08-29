@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { dev } from '$app/env';
 	import { mode, toggleMode } from 'mode-watcher';
 	import { errorState } from '#lib/errorState.svelte.js';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
@@ -77,5 +78,9 @@
 				</Sidebar.MenuButton>
 			</Sidebar.MenuItem>
 		</Sidebar.Menu>
+		<span class="px-2 text-xs text-muted-foreground">
+			v{__APP_VERSION__}
+			{#if dev}<span class="font-medium text-destructive">DEV</span>{/if}
+		</span>
 	</Sidebar.Footer>
 </Sidebar.Root>
