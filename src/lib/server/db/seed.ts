@@ -18,6 +18,7 @@ import {
 	tools
 } from './schema';
 import { createDb } from './createDb';
+import { TOOL_CATALOG } from './toolCatalog';
 import { currentMode, dbPath } from '../env';
 
 const path = dbPath(currentMode());
@@ -201,27 +202,9 @@ await db
 
 await db
 	.insert(tools)
-	.values([
-		{ name: 'current_time_tool' },
-		{ name: 'fetch_url' },
-		{ name: 'get_decks' },
-		{ name: 'add_note' },
-		{ name: 'add_sentence_note' },
-		{ name: 'find' },
-		{ name: 'get_note_types' },
-		{ name: 'get_note_info' },
-		{ name: 'cards_info' },
-		{ name: 'get_intervals' },
-		{ name: 'save_memory' },
-		{ name: 'delete_memory' },
-		{ name: 'create_topic', isSubjectRequired: true },
-		{ name: 'update_topic' },
-		{ name: 'create_mistake', isSubjectRequired: true },
-		{ name: 'update_mistake' },
-		{ name: 'save_story' },
-		{ name: 'fetch_url' },
-		{ name: 'present_quiz' }
-	])
+	.values(
+		TOOL_CATALOG.map((t) => ({ name: t.name, isSubjectRequired: t.isSubjectRequired ?? false }))
+	)
 	.onConflictDoNothing();
 
 const allAgents = await db.select().from(agents);
