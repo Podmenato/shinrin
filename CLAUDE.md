@@ -1198,16 +1198,50 @@ drizzle.config.prod.ts`, i.e. diff [schema.ts](src/lib/server/db/schema.ts)
   (`NODE_ENV=production tsx scripts/start.ts`). Compares `package.json`'s
   `version` against `.data/VERSION` (gitignored, the version last deployed
   _on this machine_ — see "Environment" below for why this one, unlike
-  `drizzle/`, stays local). Equal → just runs `node build` and starts.
+  `drizzle/`, stays local). Equal → skips straight to launching.
   Different (including first run, no `.data/VERSION` yet) → `pnpm install`
   (a version bump can change dependencies, e.g. after a `git pull`) →
   `drizzle-kit migrate --config drizzle.config.prod.ts` (applies whatever
   `pnpm run migrate` produced since the last release) → `vite build` →
-  writes the new version → starts. Never seeds, never pushes, never
-  generates. Version is
-  bumped with `pnpm version patch|minor|major`, which commits and tags
-  (`vX.Y.Z`) in one step — the tag is the release marker, there's no
-  separate publish step since nothing is published to a registry.
+  writes the new version. Either way, launches via
+  [scripts/server.ts](scripts/server.ts) — see below — never adapter-node's
+  own generated `build/index.js` (what bare `node build` would run). Never
+  seeds, never pushes, never generates. Version is bumped with `pnpm version
+patch|minor|major`, which commits and tags (`vX.Y.Z`) in one step — the
+  tag is the release marker, there's no separate publish step since nothing
+  is published to a registry.
+- **`scripts/server.ts`** — the real production server, replacing
+  adapter-node's own generated entrypoint. Exists because of a genuine bug
+  in this pinned `adapter-node@6.0.0-next.10`: confirmed by reading the
+  adapter's own build step directly, `ORIGIN` is **not** a runtime env var
+  in this version — it's baked into the compiled server as a literal string
+  from `kit.paths.origin` at `vite build` time (a static single-value pin
+  was tried first and abandoned: it only ever matches one way of addressing
+  the machine, and a self-hosted LAN IP can change on its own). Left unset,
+  adapter-node's own fallback protocol detection (`get_origin()`) defaults
+  to assuming **https**, which never matches this app's actual plain-http
+  traffic — every `form()`/`command()` submission was rejected with
+  `Cross-site ... requests are forbidden` as a result. Disabling the check
+  entirely was considered and rejected: it's close to the only real
+  protection a totally auth-less app like this has (blocks any page open
+  elsewhere in a browser on the same network from silently `POST`ing to it).
+  The actual fix: `scripts/server.ts` wraps `build/handler.js` — a stable,
+  non-hashed re-export adapter-node's own build already provides
+  specifically for a custom server, confirmed to exist in the real build
+  output, so nothing here depends on an internal/hashed chunk filename — and
+  forces `x-forwarded-proto: http` on every request (hardcoded by this
+  server itself, never read from the client, so nothing to spoof), combined
+  with `PROTOCOL_HEADER=x-forwarded-proto` so adapter-node's own origin
+  check reads it. Net effect: the origin check now works correctly and
+  dynamically for whatever address a client actually used — `localhost`, a
+  LAN IP, a `.local` hostname — no pinning needed at all. Same
+  graceful-shutdown behavior as adapter-node's generated server
+  (`closeIdleConnections`/`close`/`closeAllConnections`, then a
+  `SHUTDOWN_TIMEOUT`-style force-close) was copied over rather than lost in
+  the swap — plain Node `http.Server` API, nothing adapter-internal about
+  it. Always binds `0.0.0.0` — no host var, matching this app having no auth
+  layer to gate LAN exposure behind, so that's a deliberate trade-off, not
+  an oversight.
 - `pnpm mcp` / `pnpm mcp-dev` — runs [scripts/mcp-server.ts](scripts/mcp-server.ts),
   the MCP stdio server (see "MCP server" above), with `NODE_ENV` set to
   `production`/`development` respectively. Not something you run directly
@@ -1236,10 +1270,11 @@ drizzle.config.prod.ts`, i.e. diff [schema.ts](src/lib/server/db/schema.ts)
   `pnpm start` believe the new version was already migrated/built there,
   and skip both.
 - `.env.development` (gitignored; `.env.development.example` is the
-  committed template) currently carries exactly one var,
-  `DB_WIPE_ON_START` — see "Dev commands" above. There's no `.env.production`
-  or example for it: nothing reads one today, since a production run
-  (`pnpm start`) needs no configuration beyond `NODE_ENV=production` itself.
+  committed template) carries exactly one var, `DB_WIPE_ON_START` — see
+  "Dev commands" above. `.env.production` (same gitignore/example pattern)
+  carries exactly one var too, `SHINRIN_PORT` — the port
+  [scripts/server.ts](scripts/server.ts) listens on (default `4287`, picked
+  to dodge common frontend-tooling defaults like `3000`/`5173`/`8080`).
 - [env.ts](src/lib/server/env.ts)'s `loadEnv(mode)` loads the right
   `.env.[mode]` file for anything that runs outside Vite (drizzle configs,
   `scripts/dev.ts`). SvelteKit's own dev/build/preview don't need it — Vite

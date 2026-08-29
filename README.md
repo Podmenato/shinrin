@@ -42,6 +42,13 @@ newer version, it also applies any pending database migrations before
 building. If nothing has changed version-wise, it skips straight to
 starting the already-built server.
 
+By default this listens on `0.0.0.0:4287` — reachable from any device on
+your local network, not just this machine, and with no login of any kind.
+That's a deliberate trade-off for a personal, single-user tool, but worth
+knowing before running it on a network you don't trust. Copy
+`.env.production.example` to `.env.production` to change the port
+(`SHINRIN_PORT`).
+
 ## Developing
 
 First setup the `.env.development` file
