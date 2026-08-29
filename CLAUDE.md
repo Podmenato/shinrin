@@ -148,7 +148,7 @@ that originally motivated `jsonb`, just a different storage encoding.
   `:memory:` — a separate CLI subprocess can't reach into another process's
   in-memory db — pushed via `execFileSync('drizzle-kit', ['push', '--force',
 '--config', 'drizzle.config.test.ts'], { env: { TEST_DB_PATH } })`, the
-  exact same CLI dev already uses (`db:dev:push`/`scripts/dev.ts`) rather
+  exact same CLI [scripts/dev.ts](scripts/dev.ts) already uses rather
   than a second mechanism. [drizzle.config.test.ts](drizzle.config.test.ts)
   reads its target path from `TEST_DB_PATH` — the only one of the three
   drizzle configs that can't use a literal path, since the target is
@@ -608,7 +608,7 @@ A second, independent tool-calling surface alongside the internal Ollama
 loop above — an MCP (Model Context Protocol) stdio server that lets
 _external_ clients (Claude Code, Claude Desktop) call into shinrin's own
 tools, rather than shinrin calling out to a model. Entrypoint:
-[scripts/mcp-server.ts](scripts/mcp-server.ts) (`pnpm mcp:server`); tool
+[scripts/mcp-server.ts](scripts/mcp-server.ts) (`pnpm mcp` / `pnpm mcp-dev`); tool
 registration: [saveStoryMcpTool.ts](src/lib/server/mcp/tools/saveStoryMcpTool.ts).
 Only one tool exists so far, `save_story` — first use case was logging a
 work/coding session as material for later roleplay practice (see "Stories"
@@ -686,41 +686,42 @@ originally named `log_work_session` and renamed once that became clear.
   `dev.ts`/`seed.ts`/`clean.ts` with no downside there.
 - **Registration is per-MCP-client, not automatic, and desktop-app
   registration needed the raw config file, not the Connectors UI.** Claude
-  Code: `claude mcp add shinrin -- pnpm --dir <path> mcp:server`. Claude
-  Desktop's "Add custom connector" dialog turned out to be remote-URL-only
-  (HTTPS + optional OAuth fields, no command/args) — local stdio servers
-  there need a hand-edited `mcpServers` entry in
-  `claude_desktop_config.json` instead, same `command`/`args` shape as the
-  CLI. Either way the command must be cwd-independent (`pnpm --dir
-<absolute-path> mcp:server`, not bare `pnpm mcp:server`) since a
-  registered connector has no inherent project directory to run from.
-  Restarting the app (or reconnecting the client) is required to pick up
-  config changes — an already-open session does not retroactively gain a
+  Code: `claude mcp add shinrin -- pnpm --dir <path> mcp`. Claude Desktop's
+  "Add custom connector" dialog turned out to be remote-URL-only (HTTPS +
+  optional OAuth fields, no command/args) — local stdio servers there need
+  a hand-edited `mcpServers` entry in `claude_desktop_config.json` instead,
+  same `command`/`args` shape as the CLI. Either way the command must be
+  cwd-independent (`pnpm --dir <absolute-path> mcp`, not bare `pnpm mcp`)
+  since a registered connector has no inherent project directory to run
+  from. Restarting the app (or reconnecting the client) is required to pick
+  up config changes — an already-open session does not retroactively gain a
   newly registered or renamed tool.
-- **Defaults to dev mode, and that has a real trap worth knowing about.**
-  `mcp-server.ts` calls `loadEnv(currentMode())`
-  ([env.ts](src/lib/server/env.ts)), and with no `NODE_ENV` set (the
-  default for a client-spawned process) that's `'development'` — the dev
-  DB, the same one `DB_WIPE_ON_START` deletes and reseeds on every `pnpm
-dev` start (see "Dev commands" below). For durable real use, the
-  connector's config needs an explicit `"env": { "NODE_ENV": "production"
-}`. Worse than just data loss on a wipe: because a stdio MCP client
+- **`mcp-server.ts` itself defaults to dev mode** — it calls
+  `loadEnv(currentMode())` ([env.ts](src/lib/server/env.ts)), and with no
+  `NODE_ENV` set that's `'development'`. `pnpm mcp` / `pnpm mcp-dev`
+  (package.json) exist specifically to make that an explicit choice rather
+  than an easy-to-miss client-config setting: `mcp` hardcodes
+  `NODE_ENV=production` and is the one to register for real/durable use;
+  `mcp-dev` hardcodes `development` for testing against throwaway data.
+  Registering the raw script without going through either (or a client
+  config that doesn't set `NODE_ENV`) silently lands on dev — worth knowing
+  because of a real trap this caused once: because a stdio MCP client
   (Claude Desktop, at least) spawns the server once and keeps the same
   process alive across an entire session rather than respawning per call, a
-  wipe that happens _while_ that process is already running leaves it
-  holding an open file handle to the now-deleted, unlinked inode — Unix
-  doesn't actually remove a file while a process still has it open, it just
-  unlinks the directory entry. Every subsequent write from that process
-  lands in this orphaned, invisible copy of the database — visible to
-  nothing else, not the running web app, not a fresh
+  `DB_WIPE_ON_START` wipe that happens _while_ that process is already
+  running leaves it holding an open file handle to the now-deleted,
+  unlinked inode — Unix doesn't actually remove a file while a process
+  still has it open, it just unlinks the directory entry. Every subsequent
+  write from that process lands in this orphaned, invisible copy of the
+  database — visible to nothing else, not the running web app, not a fresh
   `sqlite3`/`better-sqlite3` connection, forever, until that specific
   process exits. Confirmed by comparing `lsof`'s reported inode for the
   running `mcp-server.ts` process against `ls -i` on the current on-disk
   file — they didn't match. The fix in the moment was restarting the MCP
   client so it opens a fresh handle; the actual lesson is that any
   long-lived connection sharing the dev DB across a `DB_WIPE_ON_START`
-  restart is fundamentally fragile, one more reason production use should
-  point at the prod DB instead, where nothing ever wipes on start.
+  restart is fundamentally fragile — which is why `mcp` (production) is now
+  the one meant to be registered by default.
 - **No lookup tool for an existing story's id** — same deliberate gap as
   `update_topic`/`update_mistake` (see "Subjects" above). `create`'s
   response text includes the new story's id specifically so a
@@ -1170,32 +1171,52 @@ add-on installed. Then `pnpm install`.
 
 - `pnpm dev` / `pnpm dev-debug` / `pnpm dev-trace` — runs [scripts/dev.ts](scripts/dev.ts).
   If `DB_WIPE_ON_START=true` (set in `.env.development`, default on) it first
-  deletes the sqlite db file, then always does
+  deletes the sqlite db file. Either way it then always runs
   `drizzle-kit push --force` (schema sync straight from
-  [schema.ts](src/lib/server/db/schema.ts), no migration files) + seeds the
-  dev DB, then runs `vite dev`. Stopping it does nothing to the DB — the wipe
-  only happens on the next start. Dev intentionally has no migration files at
-  all — they were a source of friction when the data didn't matter anyway;
-  see `db:prod:*` below for the real migration flow.
+  [schema.ts](src/lib/server/db/schema.ts), no migration files — dev never
+  uses migrations, see below), seeds the dev DB **only if it just wiped**
+  (most of seed.ts's inserts have no conflict handling, so reseeding
+  unwiped data would duplicate rows), then runs `vite dev`. Stopping it does
+  nothing to the DB — the wipe only happens on the next start.
   The `-debug`/`-trace` variants set `LOG_LEVEL` for `pino` (default level is
   `info`, see [src/lib/server/logger.ts](src/lib/server/logger.ts)).
   No server process to start beforehand — the db is a local sqlite file.
-- `pnpm build` then `pnpm start` — production build/run
-  (`NODE_ENV=production node build`). Does **not** seed or clean, and
-  doesn't load any `.env` file itself — see "Environment" below.
-- `pnpm db:dev:push` / `db:dev:studio` / `db:dev:seed` / `db:dev:clean` — dev
-  DB tools; `push` is also what `scripts/dev.ts` calls automatically.
-- `pnpm db:prod:generate` / `db:prod:migrate` / `db:prod:studio` — real
-  versioned migrations against prod (via
-  [drizzle.config.prod.ts](drizzle.config.prod.ts)) — no prod push/seed/clean
-  scripts exist on purpose, prod schema changes should go through reviewed
-  migration files.
-- `pnpm mcp:server` — runs [scripts/mcp-server.ts](scripts/mcp-server.ts), the
-  MCP stdio server (see "MCP server" above). Not something you run directly
-  day to day — an MCP client (Claude Code, Claude Desktop) spawns this
-  command itself once registered. Defaults to dev mode/dev DB like
-  everything else here unless the client config sets `NODE_ENV=production`.
-- `pnpm check`, `pnpm lint`, `pnpm format`, `pnpm test` (vitest + playwright).
+  One-off dev db commands (manual reseed/reset/browse without a full
+  restart) aren't wrapped in scripts — run `drizzle-kit push --force` /
+  `tsx src/lib/server/db/seed.ts` / `tsx src/lib/server/db/clean.ts` /
+  `drizzle-kit studio` directly (see README's "Drizzle Kit reference").
+- **`pnpm run migrate`** — `drizzle-kit generate --config
+drizzle.config.prod.ts`, i.e. diff [schema.ts](src/lib/server/db/schema.ts)
+  against the migration history already in [drizzle/](drizzle) and write a
+  new migration file. Run this at schema-change time, not batched at release
+  time — one meaningful schema change, one migration, committed together in
+  the same commit. Pure diff-and-write: touches no live database, so it's
+  safe to run any time regardless of whether a persistent db even exists
+  yet. `drizzle/` is committed (not gitignored) — it's the versioned
+  migration lineage for the one persistent db, not per-machine state.
+- **`pnpm start`** — runs [scripts/start.ts](scripts/start.ts)
+  (`NODE_ENV=production tsx scripts/start.ts`). Compares `package.json`'s
+  `version` against `.data/VERSION` (gitignored, the version last deployed
+  _on this machine_ — see "Environment" below for why this one, unlike
+  `drizzle/`, stays local). Equal → just runs `node build` and starts.
+  Different (including first run, no `.data/VERSION` yet) → `pnpm install`
+  (a version bump can change dependencies, e.g. after a `git pull`) →
+  `drizzle-kit migrate --config drizzle.config.prod.ts` (applies whatever
+  `pnpm run migrate` produced since the last release) → `vite build` →
+  writes the new version → starts. Never seeds, never pushes, never
+  generates. Version is
+  bumped with `pnpm version patch|minor|major`, which commits and tags
+  (`vX.Y.Z`) in one step — the tag is the release marker, there's no
+  separate publish step since nothing is published to a registry.
+- `pnpm mcp` / `pnpm mcp-dev` — runs [scripts/mcp-server.ts](scripts/mcp-server.ts),
+  the MCP stdio server (see "MCP server" above), with `NODE_ENV` set to
+  `production`/`development` respectively. Not something you run directly
+  day to day — an MCP client (Claude Code, Claude Desktop) spawns one of
+  these commands itself once registered, per whichever it's configured with.
+- `pnpm check`, `pnpm lint`, `pnpm format`, `pnpm test` (vitest). No e2e
+  suite — Playwright was removed (2026-08-29), unused: `playwright.config.ts`
+  had no matching `*.e2e.ts` files anywhere in the repo. Add it back
+  properly if/when real e2e tests are actually written.
 
 ## Environment
 
@@ -1206,6 +1227,14 @@ add-on installed. Then `pnpm install`.
   back when the db was Postgres and the connection string was the
   configurable part — dropped as dead weight once it was just a fixed local
   path either way, not restored since.
+- `.data/VERSION` (gitignored, written by [scripts/start.ts](scripts/start.ts))
+  records which version is actually deployed _on this machine_ — unlike
+  [drizzle/](drizzle) (committed: describes how the schema should evolve,
+  identical on every clone), this is a fact about one running instance, not
+  about the codebase. Committing it would be actively wrong: pulling a
+  version-bump commit on a second machine would make that machine's
+  `pnpm start` believe the new version was already migrated/built there,
+  and skip both.
 - `.env.development` (gitignored; `.env.development.example` is the
   committed template) currently carries exactly one var,
   `DB_WIPE_ON_START` — see "Dev commands" above. There's no `.env.production`
