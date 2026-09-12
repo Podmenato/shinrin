@@ -22,8 +22,7 @@ Shinrin (森林, "forest") is a personal language-study LLM assistant. It works 
 
 Prerequisites:
 
-- [Node 26](https://nodejs.org/en/download)
-- [pnpm](https://pnpm.io/installation)
+- [Docker](https://www.docker.com/products/docker-desktop/)
 - [Ollama](https://ollama.com/download) (`http://localhost:11434`, with at least one model pulled)
 
 Not strictly necessary, but there isn't really a point in not running them together
@@ -31,23 +30,32 @@ Not strictly necessary, but there isn't really a point in not running them toget
 - [Anki](https://apps.ankiweb.net/#downloads)
 - [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
 
+Only needed for development (see below), not for just running it:
+
+- [Node 26](https://nodejs.org/en/download)
+- [pnpm](https://pnpm.io/installation)
+
 ## Running it
 
 ```sh
-pnpm start
+docker compose up --build
 ```
 
-This builds the app and starts it. On the first run, or after pulling a
-newer version, it also applies any pending database migrations before
-building. If nothing has changed version-wise, it skips straight to
-starting the already-built server.
+This builds the image and starts the container. Every start applies any
+pending database migrations first, so pulling a newer version and running
+this again picks up new migrations automatically.
+
+Ollama and AnkiConnect are expected to be running natively on your
+machine, not inside the container — the container reaches them via
+`host.docker.internal`, already configured in
+[docker-compose.yml](docker-compose.yml).
 
 By default this listens on `0.0.0.0:4287` — reachable from any device on
 your local network, not just this machine, and with no login of any kind.
 That's a deliberate trade-off for a personal, single-user tool, but worth
-knowing before running it on a network you don't trust. Copy
-`.env.production.example` to `.env.production` to change the port
-(`SHINRIN_PORT`).
+knowing before running it on a network you don't trust. Change
+`SHINRIN_PORT` in [docker-compose.yml](docker-compose.yml) to use a
+different port.
 
 ## Developing
 
@@ -93,8 +101,8 @@ git push --follow-tags
 ```
 
 This bumps the version in `package.json`, commits it, and tags the commit
-(`vX.Y.Z`). Any machine still on an older version will pick up the new
-migrations and rebuild the next time it runs `pnpm start`.
+(`vX.Y.Z`). Anyone updating an existing instance picks up the new code and
+migrations with `git pull && docker compose up --build`.
 
 ## Commands
 
@@ -118,5 +126,4 @@ pnpm exec drizzle-kit push --force                            # sync the dev db 
 pnpm exec drizzle-kit studio                                  # browse the dev db
 pnpm exec tsx src/lib/server/db/seed.ts                        # reseed the dev db
 pnpm exec tsx src/lib/server/db/clean.ts                       # delete the dev db file
-pnpm exec drizzle-kit studio --config drizzle.config.prod.ts   # browse the production db
 ```
