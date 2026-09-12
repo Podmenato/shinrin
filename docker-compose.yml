@@ -1,0 +1,20 @@
+services:
+  shinrin:
+    build: .
+    ports:
+      - '4287:4287'
+    environment:
+      - SHINRIN_PORT=4287
+      # External services
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - ANKI_CONNECT_URL=http://host.docker.internal:8765
+    volumes:
+      - shinrin-data:/app/.data
+    # Lets the container resolve host.docker.internal on Linux hosts (Docker
+    # Desktop on Mac/Windows already provides this without it).
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    restart: unless-stopped
+
+volumes:
+  shinrin-data:

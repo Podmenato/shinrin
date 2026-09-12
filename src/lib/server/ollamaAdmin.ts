@@ -1,8 +1,8 @@
 import { Ollama, type ModelResponse } from 'ollama';
 import { logger } from './logger';
+import { ollamaBaseUrl } from './env';
 
-const OLLAMA_LOCAL_URL = 'http://localhost:11434';
-const ollama = new Ollama({ host: OLLAMA_LOCAL_URL });
+const ollama = new Ollama({ host: ollamaBaseUrl() });
 
 export interface OllamaModel extends ModelResponse {
 	running: boolean;

@@ -13,7 +13,10 @@ process.env.PROTOCOL_HEADER = 'x-forwarded-proto';
 
 const { handler } = await import('../build/handler.js');
 const { createServer } = await import('node:http');
-const { shinrinPort } = await import('#lib/server/env.js');
+// .ts, not .js: this runs under plain node, not tsx — Node's native TS
+// support strips types per-file but doesn't remap a .js specifier to the
+// real .ts file the way TS-aware tooling does, so it needs the real extension.
+const { shinrinPort } = await import('#lib/server/env.ts');
 
 const host = '0.0.0.0'; // same as adapter-node's own default
 const port = Number(shinrinPort());

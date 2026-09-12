@@ -37,6 +37,7 @@ if (deployedVersion !== version) {
 	writeFileSync(versionFile, version);
 }
 
-// scripts/server.ts, not adapter-node's generated build/index.js — see that
-// file for why. Reads SHINRIN_PORT itself; nothing to pass in here.
-run('tsx', ['scripts/server.ts']);
+// scripts/server.js, not adapter-node's generated build/index.js — see that
+// file for why. Plain JS (no tsx) so production doesn't need it as a runtime
+// dependency. Reads SHINRIN_PORT itself; nothing to pass in here.
+run('node', ['scripts/server.js']);

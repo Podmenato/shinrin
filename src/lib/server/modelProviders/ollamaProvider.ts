@@ -3,8 +3,7 @@ import type { ModelProvider, ModelResponse } from './modelProvider';
 import type { Message } from '../contextManager';
 import type { Tool } from '../tools/tool';
 import { logger } from '../logger';
-
-const OLLAMA_LOCAL_URL = 'http://localhost:11434';
+import { ollamaBaseUrl } from '../env';
 
 // Ollama defaults to a small runtime context window regardless of what the
 // model itself supports, and silently drops the oldest turns once it fills
@@ -38,7 +37,7 @@ function toOllamaTool(tool: Tool): OllamaTool {
 }
 
 export class OllamaProvider implements ModelProvider {
-	private ollama = new Ollama({ host: OLLAMA_LOCAL_URL });
+	private ollama = new Ollama({ host: ollamaBaseUrl() });
 
 	constructor(private model: string) {}
 

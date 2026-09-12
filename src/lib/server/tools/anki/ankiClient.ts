@@ -1,7 +1,7 @@
 import ky, { isNetworkError, isTimeoutError } from 'ky';
 import { ToolError } from '../tool';
+import { ankiConnectUrl } from '../../env';
 
-const ANKI_CONNECT_URL = 'http://localhost:8765';
 const ANKI_CONNECT_VERSION = 6;
 
 type AnkiResponse<T> = {
@@ -17,7 +17,7 @@ export async function ankiRequest<T>(
 	let data: AnkiResponse<T>;
 	try {
 		data = await ky
-			.post(ANKI_CONNECT_URL, {
+			.post(ankiConnectUrl(), {
 				json: { action, version: ANKI_CONNECT_VERSION, params },
 				signal
 			})
