@@ -3,13 +3,15 @@
 Personal AI language study-assistant app: a SvelteKit web UI on top of a
 tool-calling agent loop backed by Ollama (local LLM) and Anki (flashcards),
 with SQLite for persistence (sessions, messages, memories, study-topic
-progress, mistake logs). It's a local-first, single-user tool — no
-separate server process, no cloud account, everything lives in one SQLite
-file on disk (see "Database" section below). The intended audience is
-existing Anki users comfortable running it from source (clone, `pnpm
-install`, see "Dev commands" below) — there's no packaged installer and
-none is currently planned; running it depends on having Ollama and Anki
-(with the AnkiConnect add-on) already set up locally.
+progress, mistake logs). It's a local-first, single-user tool — no shared/
+hosted server, no cloud account, everything lives in one SQLite file on
+disk (see "Database" section below). Distributed as a self-hosted Docker
+Compose app (see "Docker" below) — the intended audience is existing Anki
+users willing to run `docker compose up`, not necessarily comfortable
+building from source; running it depends on having Ollama and Anki (with
+the AnkiConnect add-on) already set up locally on the same machine.
+Bare-metal (`pnpm start`) is not a supported way to run this anymore — see
+"Docker" below for why, and "Dev commands" for what's left of it.
 
 ## Stack
 
@@ -1162,6 +1164,137 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
     which sits in a plain form footer) has no conflict — keep using `Trigger`/`child` there,
     it's simpler and gives you the ARIA attributes for free.
 
+## Docker
+
+Landed 2026-09-12. `docker compose up --build` is the only supported way to
+run this in production — bare-metal `pnpm start` is not maintained as a
+fallback (see "Dev commands" below for what's left of it and why).
+Self-hosted, single-writer, LAN-first — same pattern as Open WebUI/
+Jellyfin/Plex: one container runs shinrin, Ollama and AnkiConnect stay
+running natively on the host (not containerized), reached via
+`host.docker.internal`. No CI, no published image yet — [Dockerfile](Dockerfile)
+is built locally by whoever runs `docker compose up --build`; publishing a
+prebuilt image to a registry is a real future step (would matter for a
+one-click NAS app-store template), not done now since there's no demand
+signal for it yet.
+
+- **`Dockerfile` is genuinely multi-stage**, not just organized that
+  way: a `builder` stage (`FROM node:26.8.2-alpine3.24 AS builder`) installs
+  full deps (including dev) and runs `pnpm build`; a separate final stage
+  starts a **fresh** `FROM node:26.8.2-alpine3.24` (multi-stage means every
+  `FROM` is an independent filesystem — nothing carries over except what's
+  explicitly `COPY --from=builder`'d) and does its own `pnpm install --prod`,
+  then copies in `build/`, `drizzle/`, `scripts/`, and `src/lib` from the
+  builder. This is what keeps `vite`/`eslint`/`vitest`/`tailwindcss`/etc. out
+  of the shipped image — they're needed to build the app, not to run it.
+- **Node 26's alpine image dropped `corepack` entirely** — confirmed
+  directly (`which corepack` finds nothing; `npm` is still there). Use
+  `npm install -g pnpm@11.1.3` instead of `corepack enable && corepack
+prepare pnpm@... --activate` — no reason to install corepack first just to
+  have it install pnpm, when npm can do that directly.
+- **`svelte`, `@sveltejs/kit`, and `drizzle-orm` are real `dependencies`,
+  not `devDependencies`** (moved 2026-09-12) — confirmed by grepping the
+  actual compiled `build/server/**` output for bare-specifier imports: the
+  SSR build treats these as external (never bundles them in), so they must
+  exist in `node_modules` at runtime. A `pnpm install --prod` stage without
+  this fix crashes on the first request with a missing-module error, not a
+  build-time error — easy to miss without actually testing the built
+  container, which is how this was caught.
+- **`vite`/`typescript`/`rolldown`/`esbuild`/`lightningcss` still end up in
+  the "lean" image anyway (~490MB after the base image)** — traced via
+  `pnpm why vite` to `@sveltejs/kit@3.0.0-next.25` itself listing `vite` as
+  one of _its own_ real dependencies, not dev/peer. Confirmed this is a
+  property of this SvelteKit prerelease (or possibly SvelteKit in general —
+  unverified against a stable release), not something fixable via this
+  project's own `dependencies`/`devDependencies` split. A `vite.config.ts`
+  `ssr.noExternal` change might bundle these away instead of needing them
+  installed — untried, not assumed to work.
+- **pnpm's own store + download cache were being left in the final
+  layer** — `~/.local/share/pnpm/store` (~160MB, duplicates `node_modules`
+  via hardlink) and `~/.cache/pnpm` (~167MB), both real dead weight since
+  this image never runs pnpm again after the install finishes. Fixed by
+  deleting both in the _same_ `RUN` as the install
+  (`rm -rf ~/.local/share/pnpm ~/.cache/pnpm ~/.local/state/pnpm`) — has to
+  be the same instruction, since Docker layers are additive and cleaning up
+  in a later `RUN` wouldn't shrink anything already committed. Dropped the
+  image from 736MB → 506MB, measured before/after via `docker images`.
+- **`scripts/migrate.js` replaces the `drizzle-kit migrate` CLI at
+  container start** — `drizzle-kit` measures at 95MB installed (bundles
+  esbuild + every SQL dialect it supports, not just SQLite), not worth
+  keeping in the production image just to run one command.
+  `drizzle-orm/node-sqlite/migrator`'s own `migrate(db, { migrationsFolder })`
+  does the same job — `drizzle-kit generate` still produces the SQL files
+  at dev time (`pnpm run migrate`, unchanged), this just applies them
+  differently at deploy time. Deliberately does **not** import `db` from
+  `#lib/server/db` (`createDb.ts`) — that pulls in `./schema` and more of
+  this project's usual extensionless relative imports, which only resolve
+  under TypeScript-aware tooling (tsx, vite), not plain `node` (confirmed by
+  testing directly — `Cannot find module '.../createDb'`). Instead it builds
+  its own minimal connection from `dbPath`/`currentMode` (`#lib/server/env.ts`,
+  single-file, no further relative imports of its own). Verified this
+  actually runs correctly against the real prod db (a clean no-op, since it
+  was already migrated) — also confirmed it genuinely can't run against a
+  dev-mode db, since `pnpm dev` uses `drizzle-kit push --force` (no
+  migration-tracking table at all), a different, incompatible schema-sync
+  strategy by design — the two were never meant to interact.
+- **`scripts/server.ts` → `scripts/server.js`, plain `node`, no `tsx`** —
+  the file had zero actual TypeScript syntax, so this was a pure rename, not
+  a rewrite. Chained with the migration script in the image's `CMD`:
+  `node scripts/migrate.js && node scripts/server.js`.
+- **Real gotcha from converting these two scripts off `tsx`**: this
+  project's `#lib/*` subpath-import convention (`#lib/foo.js` resolving to
+  the real `src/lib/foo.ts`) only works under TypeScript-aware tooling.
+  Plain `node` needs the literal, real extension —
+  `#lib/server/env.ts`, not `.js` — confirmed empirically (the `.js` form
+  throws `Cannot find module`, the `.ts` form resolves correctly). Node's
+  own native TypeScript support (unflagged by default, confirmed on Node
+  24/26) only strips types per-file at the exact path you import; it does
+  **not** implement TypeScript's extensionless-relative-import resolution,
+  which is why `migrate.js` avoids `db/index.ts`'s import graph entirely
+  rather than trying to make it work (see above).
+- **Ollama/AnkiConnect reachability**: both were hardcoded to
+  `http://localhost:...` (`ollamaProvider.ts`, `ollamaAdmin.ts`,
+  `ankiClient.ts`) — inside a container, `localhost` means the container
+  itself, not the host these actually run on. Fixed with two new env vars,
+  `OLLAMA_BASE_URL`/`ANKI_CONNECT_URL` (`src/lib/server/env.ts`, both
+  defaulting to the old hardcoded values — unaffected outside Docker),
+  pointed at `host.docker.internal` in `docker-compose.yml`. Chose this
+  (bridge networking + explicit env vars) over `network_mode: host` (which
+  would've needed zero code changes, at the cost of losing the container's
+  network isolation) — deliberate call to keep isolation, not a default.
+  `extra_hosts: ['host.docker.internal:host-gateway']` is required for this
+  to resolve on native Linux Docker; Docker Desktop (Mac/Windows) provides
+  it automatically either way. Verified for real, not just assumed: curled
+  both services from _inside_ a running test container via
+  `host.docker.internal` and got real responses back. Also verified
+  AnkiConnect's `webCorsOriginList` does **not** need touching — CORS is a
+  browser-enforced mechanism only; `ankiClient.ts`'s requests are
+  server-side Node `ky` calls, never a browser, so no CORS check ever
+  applies regardless of origin config.
+- **The named volume (`shinrin-data:/app/.data`) stays a named volume, not
+  a bind mount** — checked Docker's own docs rather than assume: "for
+  non-code items such as cache directories or databases, the performance
+  will be much better if they are stored in the Linux VM, using a data
+  volume" — a bind mount would cross the Mac↔VM filesystem-sharing boundary
+  (VirtioFS) on every SQLite write, which is exactly the frequent-small-
+  write pattern (WAL mode) that suffers most from that overhead. Trade-off
+  accepted: the db file isn't a plain host path anymore, so browsing it
+  (e.g. `drizzle-kit studio`) needs going through Docker (`docker cp`, or a
+  throwaway container mounting the same volume) rather than pointing a
+  local tool at a file path directly — not yet built, deferred until
+  actually needed.
+- **Compose prefixes volume names with the project name** — `shinrin-data`
+  in `docker-compose.yml` is actually `shinrin_shinrin-data` on disk. Bit
+  this once: a manual `docker run -v shinrin-data:...` for inspection
+  silently created a _different_, unrelated empty volume instead of
+  touching the real one. Always check `docker volume ls` for the real name.
+- **Migrating existing bare-metal data into Docker** is a manual, one-time
+  operation, not automated — stop the container, then a throwaway `alpine`
+  container bind-mounting both the real named volume and the host `.data/`
+  dir, `cp` the sqlite file across. Not an ongoing sync; bare-metal and the
+  Docker volume are independent copies from that point on, which is fine
+  since bare-metal isn't a supported path going forward.
+
 ## Dev commands (use pnpm)
 
 **Prerequisites**: Node 26 (`.nvmrc`), pnpm, a locally-running Ollama
@@ -1194,30 +1327,23 @@ drizzle.config.prod.ts`, i.e. diff [schema.ts](src/lib/server/db/schema.ts)
   safe to run any time regardless of whether a persistent db even exists
   yet. `drizzle/` is committed (not gitignored) — it's the versioned
   migration lineage for the one persistent db, not per-machine state.
-- **`pnpm start`** — runs [scripts/start.ts](scripts/start.ts)
-  (`NODE_ENV=production tsx scripts/start.ts`). Compares `package.json`'s
-  `version` against `.data/VERSION` (gitignored, the version last deployed
-  _on this machine_ — see "Environment" below for why this one, unlike
-  `drizzle/`, stays local). Equal → skips straight to launching.
-  Different (including first run, no `.data/VERSION` yet) → `pnpm install`
-  (a version bump can change dependencies, e.g. after a `git pull`) →
-  `drizzle-kit migrate --config drizzle.config.prod.ts` (applies whatever
-  `pnpm run migrate` produced since the last release) → `vite build` →
-  writes the new version. Either way, launches via
-  [scripts/server.ts](scripts/server.ts) — see below — never adapter-node's
-  own generated `build/index.js` (what bare `node build` would run). Never
-  seeds, never pushes, never generates. Version is bumped with `pnpm version
-patch|minor|major`, which commits and tags (`vX.Y.Z`) in one step — the
-  tag is the release marker, there's no separate publish step since nothing
-  is published to a registry.
-- **`scripts/server.ts`** — the real production server, replacing
-  adapter-node's own generated entrypoint. Exists because of a genuine bug
-  in this pinned `adapter-node@6.0.0-next.10`: confirmed by reading the
-  adapter's own build step directly, `ORIGIN` is **not** a runtime env var
-  in this version — it's baked into the compiled server as a literal string
-  from `kit.paths.origin` at `vite build` time (a static single-value pin
-  was tried first and abandoned: it only ever matches one way of addressing
-  the machine, and a self-hosted LAN IP can change on its own). Left unset,
+- **`pnpm start` is legacy — not the supported way to run this anymore**
+  (see "Docker" above). Still physically present ([scripts/start.ts](scripts/start.ts)):
+  compares `package.json`'s version against `.data/VERSION` and, on a
+  mismatch, reinstalls/migrates/rebuilds before launching — a bare-metal
+  "git pull, rerun, it upgrades itself" workflow that doesn't map onto
+  Docker (a version bump there means a new image, not an in-place upgrade).
+  Kept around unmaintained rather than deleted outright; don't extend it or
+  point anyone at it.
+- **`scripts/server.js`** (renamed from `.ts` 2026-09-12 — see "Docker"
+  above for why) — the real production server, replacing adapter-node's own
+  generated entrypoint. Exists because of a genuine bug in this pinned
+  `adapter-node@6.0.0-next.10`: confirmed by reading the adapter's own build
+  step directly, `ORIGIN` is **not** a runtime env var in this version —
+  it's baked into the compiled server as a literal string from
+  `kit.paths.origin` at `vite build` time (a static single-value pin was
+  tried first and abandoned: it only ever matches one way of addressing the
+  machine, and a self-hosted LAN IP can change on its own). Left unset,
   adapter-node's own fallback protocol detection (`get_origin()`) defaults
   to assuming **https**, which never matches this app's actual plain-http
   traffic — every `form()`/`command()` submission was rejected with
@@ -1225,7 +1351,7 @@ patch|minor|major`, which commits and tags (`vX.Y.Z`) in one step — the
   entirely was considered and rejected: it's close to the only real
   protection a totally auth-less app like this has (blocks any page open
   elsewhere in a browser on the same network from silently `POST`ing to it).
-  The actual fix: `scripts/server.ts` wraps `build/handler.js` — a stable,
+  The actual fix: `scripts/server.js` wraps `build/handler.js` — a stable,
   non-hashed re-export adapter-node's own build already provides
   specifically for a custom server, confirmed to exist in the real build
   output, so nothing here depends on an internal/hashed chunk filename — and
@@ -1241,7 +1367,8 @@ patch|minor|major`, which commits and tags (`vX.Y.Z`) in one step — the
   the swap — plain Node `http.Server` API, nothing adapter-internal about
   it. Always binds `0.0.0.0` — no host var, matching this app having no auth
   layer to gate LAN exposure behind, so that's a deliberate trade-off, not
-  an oversight.
+  an oversight. In production this runs chained after `scripts/migrate.js`
+  in the Docker image's `CMD`, not launched by `scripts/start.ts` anymore.
 - `pnpm mcp` / `pnpm mcp-dev` — runs [scripts/mcp-server.ts](scripts/mcp-server.ts),
   the MCP stdio server (see "MCP server" above), with `NODE_ENV` set to
   `production`/`development` respectively. Not something you run directly
@@ -1262,19 +1389,21 @@ patch|minor|major`, which commits and tags (`vX.Y.Z`) in one step — the
   configurable part — dropped as dead weight once it was just a fixed local
   path either way, not restored since.
 - `.data/VERSION` (gitignored, written by [scripts/start.ts](scripts/start.ts))
-  records which version is actually deployed _on this machine_ — unlike
-  [drizzle/](drizzle) (committed: describes how the schema should evolve,
-  identical on every clone), this is a fact about one running instance, not
-  about the codebase. Committing it would be actively wrong: pulling a
-  version-bump commit on a second machine would make that machine's
-  `pnpm start` believe the new version was already migrated/built there,
-  and skip both.
+  is part of the legacy bare-metal path (see "Docker" and "Dev commands"
+  above) — irrelevant to the Docker flow, which has no equivalent (a
+  version bump there is a new image, not an in-place upgrade check).
+  Documented here only because the file/mechanism still exists, not because
+  it's in active use.
 - `.env.development` (gitignored; `.env.development.example` is the
   committed template) carries exactly one var, `DB_WIPE_ON_START` — see
-  "Dev commands" above. `.env.production` (same gitignore/example pattern)
-  carries exactly one var too, `SHINRIN_PORT` — the port
-  [scripts/server.ts](scripts/server.ts) listens on (default `4287`, picked
-  to dodge common frontend-tooling defaults like `3000`/`5173`/`8080`).
+  "Dev commands" above, still current (dev workflow is unaffected by the
+  Docker move). `.env.production`/`.env.production.example` are legacy,
+  same bare-metal caveat as `.data/VERSION` above — in the Docker flow,
+  `SHINRIN_PORT` (the port [scripts/server.js](scripts/server.js) listens
+  on, default `4287`) is set directly in `docker-compose.yml`'s
+  `environment:` block instead, alongside `OLLAMA_BASE_URL`/
+  `ANKI_CONNECT_URL` (see "Docker" above) — none of these three go through
+  a `.env.[mode]` file for the Docker path.
 - [env.ts](src/lib/server/env.ts)'s `loadEnv(mode)` loads the right
   `.env.[mode]` file for anything that runs outside Vite (drizzle configs,
   `scripts/dev.ts`). SvelteKit's own dev/build/preview don't need it — Vite
