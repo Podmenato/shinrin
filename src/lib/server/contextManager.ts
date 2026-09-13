@@ -8,6 +8,7 @@ import {
 } from './db/schema';
 import type { ModelProvider } from './modelProviders/modelProvider';
 import type { JsonValue } from '#lib/json.js';
+import { messageRegistry } from './messageRegistry';
 
 export type ToolCall = {
 	name: string;
@@ -62,6 +63,8 @@ export class ContextManager {
 				}
 			}
 		}
+
+		messageRegistry.notify(this.sessionId);
 	}
 
 	build(): Message[] {

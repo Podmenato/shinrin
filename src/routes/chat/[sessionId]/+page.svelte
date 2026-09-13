@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import {
 		getSession,
-		getSessionMessages,
+		getSessionMessagesQuery,
 		getStreamingReply,
 		runAgent,
 		cancelAgent
@@ -23,7 +23,7 @@
 	const { sessionId } = $derived(params);
 
 	const session = $derived(await getSession(sessionId));
-	const sessionMessages = $derived(getSessionMessages(sessionId));
+	const sessionMessages = $derived(getSessionMessagesQuery(sessionId));
 	const streamingReply = $derived(getStreamingReply(sessionId));
 
 	let prompt = $state('');
@@ -34,27 +34,16 @@
 		streamingReply.current !== null && streamingReply.current !== undefined
 	);
 
-	// TODO: workaround for `getSessionMessages` being a plain `query()` — its single-flight
-	// refresh from `runAgent` only reaches the tab that called it, so a reload or a second tab
-	// never sees the final message otherwise. See the TODO on `getSessionMessages` in
-	// sessions.remote.ts for the proper fix (make it a `query.live()`).
-	let wasGenerating = false;
-	$effect(() => {
-		if (wasGenerating && !isGenerating) {
-			sessionMessages.refresh();
-		}
-		wasGenerating = isGenerating;
-	});
-
 	async function send() {
 		const trimmed = prompt.trim();
 
 		if (!trimmed || isSending) return;
 
+		prompt = '';
 		try {
 			await runAgent({ sessionId, prompt: trimmed });
-			prompt = '';
 		} catch {
+			prompt = trimmed;
 			toast.error('Failed to send message');
 		} finally {
 			stopping = false;
@@ -104,9 +93,16 @@
 			<ScrollArea class="h-[60vh] rounded-md border p-4">
 				<AnkiSelectionMenu {sessionId}>
 					<div class="flex flex-col gap-4">
-						{#each sessionMessages.current ?? [] as message (message.id)}
-							<ChatMessage {message} />
-						{/each}
+						{#if sessionMessages.current === null}
+							<div class="flex items-center gap-2 text-sm text-muted-foreground">
+								<Spinner class="size-4" />
+								Loading...
+							</div>
+						{:else}
+							{#each sessionMessages.current as message (message.id)}
+								<ChatMessage {message} />
+							{/each}
+						{/if}
 						{#if isGenerating}
 							{#if streamingReply.current}
 								<ChatMessage

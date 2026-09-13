@@ -1,9 +1,10 @@
-import { command, query } from '$app/server';
+import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { db } from '#lib/server/db/index.js';
 import { Agent } from '#lib/server/agent.js';
 import { OllamaProvider } from '#lib/server/modelProviders/ollamaProvider.js';
 import { sessionRegistry } from '#lib/server/sessionRegistry.js';
+import { messageRegistry } from '#lib/server/messageRegistry.js';
 import type { JsonValue } from '#lib/json.js';
 import * as v from 'valibot';
 
@@ -20,19 +21,10 @@ export const getSession = query(v.pipe(v.string(), v.uuid()), async (sessionId) 
 });
 
 /**
- * Returns a session's messages in order, with any tool calls attached, excluding system messages.
- *
- * TODO: this is a plain `query()`, refreshed via single-flight from `runAgent` — which only
- * reaches the browser tab that actually called `runAgent`. A page reload or a second tab
- * watching the same session never sees the refresh, so `+page.svelte` currently papers over
- * this with a client-side `$effect` that force-refreshes once generation ends. The correct
- * fix is to make this a `query.live()` backed by a notify signal fired from
- * `ContextManager.add()` (the one choke point every persisted message goes through), using
- * the same abort-aware wait/notify shape as `SessionRegistry`. That would also be the
- * natural foundation for live tool-call-in-progress visibility (see project roadmap), since
- * both problems are "the message list should update live, not just once at the end."
+ * Get session messages from DB, excluding system messages
+ * @param sessionId
  */
-export const getSessionMessages = query(v.pipe(v.string(), v.uuid()), async (sessionId) => {
+async function getSessionMessages(sessionId: string) {
 	const rows = await db.query.messages.findMany({
 		where: { sessionId },
 		orderBy: { createdAt: 'asc' },
@@ -52,7 +44,25 @@ export const getSessionMessages = query(v.pipe(v.string(), v.uuid()), async (ses
 				args: tc.args as Record<string, JsonValue>
 			}))
 		}));
-});
+}
+
+/**
+ * Live query returning session's messages excluding system messages. Re-fetches and re-yields
+ * whenever `ContextManager.add()` persists a message for this session
+ */
+export const getSessionMessagesQuery = query.live(
+	v.pipe(v.string(), v.uuid()),
+	async function* (sessionId) {
+		const { signal } = getRequestEvent().request;
+
+		yield null;
+
+		while (!signal.aborted) {
+			yield await getSessionMessages(sessionId);
+			await messageRegistry.next(sessionId, signal);
+		}
+	}
+);
 
 const runSchema = v.object({
 	sessionId: v.pipe(v.string(), v.uuid()),
@@ -84,7 +94,6 @@ export const runAgent = command(runSchema, async ({ sessionId, prompt }) => {
 			controller.signal
 		);
 	} finally {
-		await getSessionMessages(sessionId).refresh();
 		sessionRegistry.end(sessionId);
 	}
 });
