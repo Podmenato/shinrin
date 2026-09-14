@@ -1,10 +1,13 @@
 import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
+import { sessions } from '#lib/server/db/schema.js';
 import { Agent } from '#lib/server/agent.js';
 import { OllamaProvider } from '#lib/server/modelProviders/ollamaProvider.js';
 import { sessionRegistry } from '#lib/server/sessionRegistry.js';
 import { messageRegistry } from '#lib/server/messageRegistry.js';
+import { getAllSessions } from '#lib/agents.remote.js';
 import type { JsonValue } from '#lib/json.js';
 import * as v from 'valibot';
 
@@ -102,3 +105,28 @@ export const runAgent = command(runSchema, async ({ sessionId, prompt }) => {
 export const cancelAgent = command(v.pipe(v.string(), v.uuid()), async (sessionId) => {
 	sessionRegistry.cancel(sessionId);
 });
+
+/** Changes the model a session runs on. Rejected while a run is in flight. */
+export const updateSessionModel = command(
+	v.object({
+		sessionId: v.pipe(v.string(), v.uuid()),
+		model: v.pipe(v.string(), v.nonEmpty())
+	}),
+	async ({ sessionId, model }) => {
+		const session = await db.query.sessions.findFirst({ where: { id: sessionId } });
+		if (!session) {
+			error(404, 'Session not found');
+		}
+
+		if (sessionRegistry.get(sessionId) !== null) {
+			error(409, 'Cannot change the model while a reply is generating.');
+		}
+
+		await db
+			.update(sessions)
+			.set({ model, updatedAt: new Date() })
+			.where(eq(sessions.id, sessionId));
+
+		await Promise.all([getSession(sessionId).refresh(), getAllSessions().refresh()]);
+	}
+);

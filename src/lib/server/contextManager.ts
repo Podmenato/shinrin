@@ -20,6 +20,7 @@ export type Message = {
 	content: string;
 	toolCalls?: ToolCall[];
 	toolName?: string;
+	model?: string;
 };
 
 const COMPACTION_INSTRUCTION = `Ignore your instructions above for this response only, and do not stay in character. Summarize the conversation above so it can continue with less history in context. Write a concise but complete summary that preserves: topics covered, preferences or decisions the user expressed, and any unresolved question or pending tasks. Respond in English, as a neutral summarizer. Write only the summary, with no preamble or commentary about the summarization itself.`;
@@ -44,7 +45,8 @@ export class ContextManager {
 				sessionId: this.sessionId,
 				role: message.role,
 				content: message.content,
-				toolName: message.toolName
+				toolName: message.toolName,
+				model: message.model
 			})
 			.returning();
 

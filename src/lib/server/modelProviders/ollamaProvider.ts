@@ -109,7 +109,7 @@ export class OllamaProvider implements ModelProvider {
 				'received streaming chat response'
 			);
 
-			return { content, toolCalls };
+			return { content, toolCalls, model: this.model };
 		} finally {
 			signal.removeEventListener('abort', onAbort);
 		}

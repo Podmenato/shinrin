@@ -155,7 +155,8 @@ export class Agent {
 				await this.ctx.add({
 					role: 'assistant',
 					content: response.content,
-					toolCalls: response.toolCalls
+					toolCalls: response.toolCalls,
+					model: response.model
 				});
 			} else {
 				await this.ctx.add({

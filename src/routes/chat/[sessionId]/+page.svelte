@@ -5,10 +5,13 @@
 		getSessionMessagesQuery,
 		getStreamingReply,
 		runAgent,
-		cancelAgent
+		cancelAgent,
+		updateSessionModel
 	} from '#lib/sessions.remote.js';
+	import { getAvailableModels } from '#lib/ollamaAdmin.remote.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
 	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -28,11 +31,34 @@
 
 	let prompt = $state('');
 	let stopping = $state(false);
+	let selectedModel = $state(session.model);
 
 	const isSending = $derived(runAgent.pending > 0);
 	const isGenerating = $derived(
 		streamingReply.current !== null && streamingReply.current !== undefined
 	);
+
+	// Getting the model list can fail when Ollama is turned off
+	const modelsQuery = getAvailableModels();
+	const modelOptions = $derived([
+		...new Set([session.model, ...(modelsQuery.current ?? []).map((m) => m.model)])
+	]);
+	const modelTriggerContent = $derived(
+		modelOptions.find((m) => m === selectedModel) ?? selectedModel
+	);
+
+	async function changeModel(model: string) {
+		if (model === selectedModel) return;
+
+		const previous = selectedModel;
+		selectedModel = model;
+		try {
+			await updateSessionModel({ sessionId, model });
+		} catch {
+			selectedModel = previous;
+			toast.error('Failed to change the model');
+		}
+	}
 
 	async function send() {
 		const trimmed = prompt.trim();
@@ -80,7 +106,21 @@
 		{#if session}
 			<div class="flex items-center gap-2">
 				<Badge variant="secondary">{session.agent.name}</Badge>
-				<Badge variant="outline">{session.model}</Badge>
+				<Select.Root
+					type="single"
+					value={selectedModel}
+					onValueChange={changeModel}
+					disabled={isGenerating}
+				>
+					<Select.Trigger size="sm" class="w-fit">
+						{modelTriggerContent}
+					</Select.Trigger>
+					<Select.Content>
+						{#each modelOptions as model (model)}
+							<Select.Item value={model} label={model} />
+						{/each}
+					</Select.Content>
+				</Select.Root>
 			</div>
 		{/if}
 	</div>
