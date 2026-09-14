@@ -4,6 +4,7 @@ import type { Tool } from '../tools/tool';
 export type ModelResponse = {
 	content: string;
 	toolCalls?: ToolCall[];
+	model?: string;
 };
 
 export interface ModelProvider {

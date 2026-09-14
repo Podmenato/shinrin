@@ -110,6 +110,7 @@ export const messages = sqliteTable('messages', {
 	role: text('role').notNull(),
 	content: text('content').notNull(),
 	toolName: text('tool_name'),
+	model: text('model'),
 	createdAt: createdAt()
 });
 
