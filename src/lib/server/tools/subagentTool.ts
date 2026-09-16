@@ -1,8 +1,8 @@
 import type { Tool, ToolDefinition } from './tool';
 import { ToolError } from './tool';
 import { Agent } from '../agent';
-import { OllamaProvider } from '../modelProviders/ollamaProvider';
 import { toJsonObjectSchema, type JsonValue } from '#lib/json.js';
+import type { ModelSelection } from '#lib/models.js';
 
 /** Wraps another agent as a tool: calling it runs a full nested agent loop and returns its final reply. */
 export class SubagentTool implements Tool {
@@ -12,7 +12,7 @@ export class SubagentTool implements Tool {
 		private subagentId: string,
 		name: string,
 		description: string,
-		private model: string,
+		private selection: ModelSelection,
 		private parentSessionId: string
 	) {
 		this.definition = {
@@ -30,13 +30,10 @@ export class SubagentTool implements Tool {
 			throw new ToolError('input must be a string');
 		}
 
-		// TODO: needs provider as a agent attribute + provider registry
-		const provider = new OllamaProvider(this.model);
 		const agent = await Agent.create(
 			this.subagentId,
 			this.definition.name,
-			this.model,
-			provider,
+			this.selection,
 			this.parentSessionId
 		);
 

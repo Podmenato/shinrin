@@ -21,6 +21,33 @@ const updatedAt = () =>
 		.notNull()
 		.$defaultFn(() => new Date());
 
+export const providers = sqliteTable('providers', {
+	id: generateUUID(),
+	name: text().notNull().unique(),
+	createdAt: createdAt(),
+	updatedAt: updatedAt()
+});
+
+// A materialized record of every (provider, model name) pair actually used, not a pre-seeded
+// catalog — rows are get-or-created lazily the first time a model is selected (see
+// getOrCreateModel), since Ollama's model list is whatever the user has pulled locally and isn't
+// known ahead of time the way `tools` is. Model pickers list live from each provider's own API
+// and never read this table; it only exists so sessions/agents/quick asks can hold a stable FK
+// instead of a bare string that could go stale or ambiguous.
+export const models = sqliteTable(
+	'models',
+	{
+		id: generateUUID(),
+		providerId: text('provider_id')
+			.notNull()
+			.references(() => providers.id),
+		name: text().notNull(),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [unique().on(t.providerId, t.name)]
+);
+
 export const subjects = sqliteTable('subjects', {
 	id: generateUUID(),
 	name: text().notNull().unique(),
@@ -41,7 +68,7 @@ export const agents = sqliteTable('agents', {
 	systemPrompt: text('system_prompt'),
 	isSubagent: integer('is_subagent', { mode: 'boolean' }).notNull().default(false),
 	subagentDescription: text('subagent_description'),
-	defaultModel: text('default_model'),
+	defaultModelId: text('default_model_id').references(() => models.id),
 	subjectId: text('subject_id').references(() => subjects.id),
 	deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
 	createdAt: createdAt(),
@@ -88,7 +115,9 @@ export const sessions = sqliteTable('sessions', {
 		.notNull()
 		.references(() => agents.id),
 	name: text().notNull(),
-	model: text().notNull(),
+	modelId: text('model_id')
+		.notNull()
+		.references(() => models.id),
 	systemPrompt: text('system_prompt'),
 	summary: text('summary'),
 	parentSessionId: text('parent_session_id').references((): AnySQLiteColumn => sessions.id, {
@@ -218,7 +247,9 @@ export const quickAsks = sqliteTable('quick_asks', {
 	agentId: text('agent_id')
 		.notNull()
 		.references(() => agents.id),
-	model: text().notNull(),
+	modelId: text('model_id')
+		.notNull()
+		.references(() => models.id),
 	deck: text().notNull(),
 	state: text().notNull(),
 	days: integer('days'),
@@ -233,8 +264,11 @@ export const quickAsks = sqliteTable('quick_asks', {
 // needed: each relation's own `to` already says which column it's through.
 // `r.one.X(...)` defaults to `optional: true` regardless of the underlying FK's own nullability
 // (unlike v1, which inferred it from the FK column) — every one() below sets `optional: false`
-// except agents.subject, since agents.subjectId is the only genuinely-nullable FK in this schema.
+// except where the underlying FK is itself nullable: agents.subject (agents.subjectId) and
+// agents.defaultModel (agents.defaultModelId).
 const schemaTables = {
+	providers,
+	models,
 	subjects,
 	agents,
 	tools,
@@ -254,6 +288,15 @@ const schemaTables = {
 };
 
 export const relations = defineRelations(schemaTables, (r) => ({
+	providers: {
+		models: r.many.models({ from: r.providers.id, to: r.models.providerId })
+	},
+	models: {
+		provider: r.one.providers({ from: r.models.providerId, to: r.providers.id, optional: false }),
+		sessions: r.many.sessions({ from: r.models.id, to: r.sessions.modelId }),
+		quickAsks: r.many.quickAsks({ from: r.models.id, to: r.quickAsks.modelId }),
+		defaultForAgents: r.many.agents({ from: r.models.id, to: r.agents.defaultModelId })
+	},
 	subjects: {
 		agents: r.many.agents({ from: r.subjects.id, to: r.agents.subjectId }),
 		studyTopics: r.many.studyTopics({ from: r.subjects.id, to: r.studyTopics.subjectId }),
@@ -270,6 +313,7 @@ export const relations = defineRelations(schemaTables, (r) => ({
 	},
 	agents: {
 		subject: r.one.subjects({ from: r.agents.subjectId, to: r.subjects.id }),
+		defaultModel: r.one.models({ from: r.agents.defaultModelId, to: r.models.id }),
 		agentTools: r.many.agentTools({ from: r.agents.id, to: r.agentTools.agentId }),
 		sessions: r.many.sessions({ from: r.agents.id, to: r.sessions.agentId }),
 		subagents: r.many.agentSubagents({ from: r.agents.id, to: r.agentSubagents.agentId }),
@@ -293,6 +337,7 @@ export const relations = defineRelations(schemaTables, (r) => ({
 	},
 	sessions: {
 		agent: r.one.agents({ from: r.sessions.agentId, to: r.agents.id, optional: false }),
+		model: r.one.models({ from: r.sessions.modelId, to: r.models.id, optional: false }),
 		messages: r.many.messages({ from: r.sessions.id, to: r.messages.sessionId })
 	},
 	messages: {
@@ -343,6 +388,7 @@ export const relations = defineRelations(schemaTables, (r) => ({
 		file: r.one.files({ from: r.storyResources.fileId, to: r.files.id, optional: false })
 	},
 	quickAsks: {
-		agent: r.one.agents({ from: r.quickAsks.agentId, to: r.agents.id, optional: false })
+		agent: r.one.agents({ from: r.quickAsks.agentId, to: r.agents.id, optional: false }),
+		model: r.one.models({ from: r.quickAsks.modelId, to: r.models.id, optional: false })
 	}
 }));

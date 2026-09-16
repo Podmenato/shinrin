@@ -8,6 +8,8 @@ import {
 	files,
 	messages,
 	mistakeObservations,
+	models,
+	providers,
 	quickAsks,
 	sessions,
 	stories,
@@ -19,6 +21,7 @@ import {
 } from './schema';
 import { createDb } from './createDb';
 import { TOOL_CATALOG } from './toolCatalog';
+import { PROVIDER_CATALOG } from './providerCatalog';
 import { currentMode, dbPath } from '../env';
 
 const path = dbPath(currentMode());
@@ -206,6 +209,10 @@ await db
 		TOOL_CATALOG.map((t) => ({ name: t.name, isSubjectRequired: t.isSubjectRequired ?? false }))
 	)
 	.onConflictDoNothing();
+
+await db.insert(providers).values(PROVIDER_CATALOG).onConflictDoNothing();
+const allProviders = await db.select().from(providers);
+const providersByName = new Map(allProviders.map((p) => [p.name, p]));
 
 const allAgents = await db.select().from(agents);
 const allTools = await db.select().from(tools);
@@ -532,26 +539,6 @@ const SESSION_SEEDS: Record<
 	]
 };
 
-await db.delete(messages);
-await db.delete(sessions);
-for (const [agentName, sessionSeeds] of Object.entries(SESSION_SEEDS)) {
-	const agent = agentsByName.get(agentName);
-	if (!agent) continue;
-	for (const seed of sessionSeeds) {
-		const [session] = await db
-			.insert(sessions)
-			.values({ agentId: agent.id, name: seed.name, model: seed.model })
-			.returning();
-		await db.insert(messages).values(
-			seed.messages.map((m) => ({
-				sessionId: session.id,
-				role: m.role,
-				content: m.content
-			}))
-		);
-	}
-}
-
 const QUICK_ASK_SEEDS: Record<
 	string,
 	{ name: string; deck: string; state: string; days?: number; model: string; prompt: string }[]
@@ -574,6 +561,41 @@ const QUICK_ASK_SEEDS: Record<
 	]
 };
 
+// Every seed model runs on ollama — the only provider that exists. `models` rows are otherwise
+// get-or-created lazily at runtime (see getOrCreateModel.ts); seeding bulk-inserts this fixed,
+// known set of seed model names directly instead of calling that per-request helper in a loop.
+const ollamaProvider = providersByName.get('ollama')!;
+const SEED_MODEL_NAMES = new Set([
+	...Object.values(SESSION_SEEDS).flatMap((seeds) => seeds.map((s) => s.model)),
+	...Object.values(QUICK_ASK_SEEDS).flatMap((seeds) => seeds.map((s) => s.model))
+]);
+await db
+	.insert(models)
+	.values([...SEED_MODEL_NAMES].map((name) => ({ providerId: ollamaProvider.id, name })))
+	.onConflictDoNothing();
+const allModels = await db.select().from(models);
+const modelsByName = new Map(allModels.map((m) => [m.name, m]));
+
+await db.delete(messages);
+await db.delete(sessions);
+for (const [agentName, sessionSeeds] of Object.entries(SESSION_SEEDS)) {
+	const agent = agentsByName.get(agentName);
+	if (!agent) continue;
+	for (const seed of sessionSeeds) {
+		const [session] = await db
+			.insert(sessions)
+			.values({ agentId: agent.id, name: seed.name, modelId: modelsByName.get(seed.model)!.id })
+			.returning();
+		await db.insert(messages).values(
+			seed.messages.map((m) => ({
+				sessionId: session.id,
+				role: m.role,
+				content: m.content
+			}))
+		);
+	}
+}
+
 await db.delete(quickAsks);
 await db.insert(quickAsks).values(
 	Object.entries(QUICK_ASK_SEEDS).flatMap(([agentName, seeds]) => {
@@ -582,7 +604,7 @@ await db.insert(quickAsks).values(
 		return seeds.map((seed) => ({
 			name: seed.name,
 			agentId: agent.id,
-			model: seed.model,
+			modelId: modelsByName.get(seed.model)!.id,
 			deck: seed.deck,
 			state: seed.state,
 			days: seed.days ?? null,

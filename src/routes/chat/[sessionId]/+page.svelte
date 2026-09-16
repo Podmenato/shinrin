@@ -8,7 +8,8 @@
 		cancelAgent,
 		updateSessionModel
 	} from '#lib/sessions.remote.js';
-	import { getAvailableModels } from '#lib/ollamaAdmin.remote.js';
+	import { getModelOptions } from '#lib/models.remote.js';
+	import { encodeModelSelection, decodeModelSelection, type ModelSelection } from '#lib/models.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
@@ -31,31 +32,30 @@
 
 	let prompt = $state('');
 	let stopping = $state(false);
-	let selectedModel = $state(session.model);
+	let selectionValue = $state(
+		encodeModelSelection({
+			provider: session.model.provider.name as ModelSelection['provider'],
+			name: session.model.name
+		})
+	);
 
 	const isSending = $derived(runAgent.pending > 0);
 	const isGenerating = $derived(
 		streamingReply.current !== null && streamingReply.current !== undefined
 	);
 
-	// Getting the model list can fail when Ollama is turned off
-	const modelsQuery = getAvailableModels();
-	const modelOptions = $derived([
-		...new Set([session.model, ...(modelsQuery.current ?? []).map((m) => m.model)])
-	]);
-	const modelTriggerContent = $derived(
-		modelOptions.find((m) => m === selectedModel) ?? selectedModel
-	);
+	const modelGroups = $derived(await getModelOptions());
+	const modelTriggerContent = $derived(decodeModelSelection(selectionValue).name);
 
-	async function changeModel(model: string) {
-		if (model === selectedModel) return;
+	async function changeModel(value: string) {
+		if (value === selectionValue) return;
 
-		const previous = selectedModel;
-		selectedModel = model;
+		const previous = selectionValue;
+		selectionValue = value;
 		try {
-			await updateSessionModel({ sessionId, model });
+			await updateSessionModel({ sessionId, model: decodeModelSelection(value) });
 		} catch {
-			selectedModel = previous;
+			selectionValue = previous;
 			toast.error('Failed to change the model');
 		}
 	}
@@ -108,7 +108,7 @@
 				<Badge variant="secondary">{session.agent.name}</Badge>
 				<Select.Root
 					type="single"
-					value={selectedModel}
+					value={selectionValue}
 					onValueChange={changeModel}
 					disabled={isGenerating}
 				>
@@ -116,8 +116,16 @@
 						{modelTriggerContent}
 					</Select.Trigger>
 					<Select.Content>
-						{#each modelOptions as model (model)}
-							<Select.Item value={model} label={model} />
+						{#each modelGroups as group (group.provider)}
+							<Select.Group>
+								<Select.GroupHeading>{group.provider}</Select.GroupHeading>
+								{#each group.models as name (name)}
+									<Select.Item
+										value={encodeModelSelection({ provider: group.provider, name })}
+										label={name}
+									/>
+								{/each}
+							</Select.Group>
 						{/each}
 					</Select.Content>
 				</Select.Root>

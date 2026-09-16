@@ -1,25 +1,36 @@
 import type { ModelProvider } from './modelProviders/modelProvider';
+import { getModelProvider } from './modelProviders/providerRegistry';
 import { ContextManager, type Message } from './contextManager';
 import type { Tool } from './tools/tool';
 import { ToolError } from './tools/tool';
 import { logger } from './logger';
 import { db } from './db/index';
 import { sessions } from './db/schema';
+import { getOrCreateModel } from './db/getOrCreateModel';
 import { getTools, getSubagentTools } from './tools/toolRegistry';
 import { extractUserUrls } from './tools/fetchUrlTool';
+import type { ModelSelection } from '#lib/models.js';
 
 const MAX_ITERATIONS = 20;
 const CANCELLED_MESSAGE = 'Cancelled by user.';
 
 export class Agent {
 	private provider: ModelProvider;
+	private model: string;
 	private ctx: ContextManager;
 	private tools: Tool[];
 	readonly agentId: string;
 
-	constructor(agentId: string, provider: ModelProvider, ctx: ContextManager, tools: Tool[] = []) {
+	constructor(
+		agentId: string,
+		provider: ModelProvider,
+		model: string,
+		ctx: ContextManager,
+		tools: Tool[] = []
+	) {
 		this.agentId = agentId;
 		this.provider = provider;
+		this.model = model;
 		this.ctx = ctx;
 		this.tools = tools;
 	}
@@ -27,8 +38,7 @@ export class Agent {
 	static async create(
 		agentId: string,
 		name: string,
-		model: string,
-		modelProvider: ModelProvider,
+		selection: ModelSelection,
 		parentSessionId?: string
 	): Promise<Agent> {
 		const agent = await db.query.agents.findFirst({
@@ -51,26 +61,31 @@ export class Agent {
 			}
 		);
 
+		const modelId = await getOrCreateModel(selection.provider, selection.name);
+
 		const [session] = await db
 			.insert(sessions)
-			.values({ agentId, name, model, parentSessionId })
+			.values({ agentId, name, modelId, parentSessionId })
 			.returning();
 
-		const subagentTools = await getSubagentTools(agentId, model, session.id);
+		const subagentTools = await getSubagentTools(agentId, selection, session.id);
 
 		const contextManager = new ContextManager(agent.systemPrompt ?? '', session.id);
+		const modelProvider = getModelProvider(selection.provider);
 
-		return new Agent(agentId, modelProvider, contextManager, [...tools, ...subagentTools]);
+		return new Agent(agentId, modelProvider, selection.name, contextManager, [
+			...tools,
+			...subagentTools
+		]);
 	}
 
-	static async createFromSession(
-		sessionId: string,
-		modelProvider: ModelProvider,
-		prompt: string
-	): Promise<Agent> {
+	static async createFromSession(sessionId: string, prompt: string): Promise<Agent> {
 		const session = await db.query.sessions.findFirst({
 			where: { id: sessionId },
-			with: { agent: { with: { agentTools: { with: { tool: true } } } } }
+			with: {
+				agent: { with: { agentTools: { with: { tool: true } } } },
+				model: { with: { provider: true } }
+			}
 		});
 
 		if (session === undefined) {
@@ -78,6 +93,10 @@ export class Agent {
 		}
 
 		const agentId = session.agent.id;
+		const selection: ModelSelection = {
+			provider: session.model.provider.name as ModelSelection['provider'],
+			name: session.model.name
+		};
 
 		const systemPrompt = [session.agent.systemPrompt, session.systemPrompt]
 			.filter((prompt) => prompt !== null && prompt.trim() !== '')
@@ -99,13 +118,17 @@ export class Agent {
 				urls: extractUserUrls(userTexts)
 			}
 		);
-		const subagentTools = await getSubagentTools(agentId, session.model, session.id);
+		const subagentTools = await getSubagentTools(agentId, selection, session.id);
+		const modelProvider = getModelProvider(selection.provider);
 
-		return new Agent(agentId, modelProvider, contextManager, [...tools, ...subagentTools]);
+		return new Agent(agentId, modelProvider, selection.name, contextManager, [
+			...tools,
+			...subagentTools
+		]);
 	}
 
 	async compact(): Promise<void> {
-		await this.ctx.compact(this.provider);
+		await this.ctx.compact(this.provider, this.model);
 	}
 
 	async run(
@@ -133,7 +156,7 @@ export class Agent {
 			// TODO: not sure about this
 			try {
 				if (isStreaming) {
-					const stream = this.provider.chatStream(this.ctx.build(), this.tools, signal);
+					const stream = this.provider.chatStream(this.model, this.ctx.build(), this.tools, signal);
 					let next = await stream.next();
 					while (!next.done) {
 						onChunk(next.value);
@@ -141,7 +164,7 @@ export class Agent {
 					}
 					response = next.value;
 				} else {
-					response = await this.provider.chat(this.ctx.build(), this.tools, signal);
+					response = await this.provider.chat(this.model, this.ctx.build(), this.tools, signal);
 				}
 			} catch (e) {
 				if (signal.aborted) {

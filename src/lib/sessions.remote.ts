@@ -4,7 +4,8 @@ import { eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { sessions } from '#lib/server/db/schema.js';
 import { Agent } from '#lib/server/agent.js';
-import { OllamaProvider } from '#lib/server/modelProviders/ollamaProvider.js';
+import { modelSelectionSchema } from '#lib/server/modelProviders/providerRegistry.js';
+import { getOrCreateModel } from '#lib/server/db/getOrCreateModel.js';
 import { sessionRegistry } from '#lib/server/sessionRegistry.js';
 import { messageRegistry } from '#lib/server/messageRegistry.js';
 import { getAllSessions } from '#lib/agents.remote.js';
@@ -15,7 +16,7 @@ import * as v from 'valibot';
 export const getSession = query(v.pipe(v.string(), v.uuid()), async (sessionId) => {
 	const session = await db.query.sessions.findFirst({
 		where: { id: sessionId },
-		with: { agent: { with: { subject: true } } }
+		with: { agent: { with: { subject: true } }, model: { with: { provider: true } } }
 	});
 	if (!session) {
 		error(404, 'Session not found');
@@ -84,9 +85,7 @@ export const runAgent = command(runSchema, async ({ sessionId, prompt }) => {
 		error(404, 'Session not found');
 	}
 
-	// TODO: make provider independent
-	const provider = new OllamaProvider(session.model);
-	const agent = await Agent.createFromSession(sessionId, provider, prompt);
+	const agent = await Agent.createFromSession(sessionId, prompt);
 	const controller = new AbortController();
 
 	sessionRegistry.start(sessionId, controller);
@@ -110,7 +109,7 @@ export const cancelAgent = command(v.pipe(v.string(), v.uuid()), async (sessionI
 export const updateSessionModel = command(
 	v.object({
 		sessionId: v.pipe(v.string(), v.uuid()),
-		model: v.pipe(v.string(), v.nonEmpty())
+		model: modelSelectionSchema
 	}),
 	async ({ sessionId, model }) => {
 		const session = await db.query.sessions.findFirst({ where: { id: sessionId } });
@@ -122,9 +121,11 @@ export const updateSessionModel = command(
 			error(409, 'Cannot change the model while a reply is generating.');
 		}
 
+		const modelId = await getOrCreateModel(model.provider, model.name);
+
 		await db
 			.update(sessions)
-			.set({ model, updatedAt: new Date() })
+			.set({ modelId, updatedAt: new Date() })
 			.where(eq(sessions.id, sessionId));
 
 		await Promise.all([getSession(sessionId).refresh(), getAllSessions().refresh()]);

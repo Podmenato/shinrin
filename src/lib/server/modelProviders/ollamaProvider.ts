@@ -4,6 +4,7 @@ import type { Message } from '../contextManager';
 import type { Tool } from '../tools/tool';
 import { logger } from '../logger';
 import { ollamaBaseUrl } from '../env';
+import { listModels } from '../ollamaAdmin';
 
 // Ollama defaults to a small runtime context window regardless of what the
 // model itself supports, and silently drops the oldest turns once it fills
@@ -39,14 +40,22 @@ function toOllamaTool(tool: Tool): OllamaTool {
 export class OllamaProvider implements ModelProvider {
 	private ollama = new Ollama({ host: ollamaBaseUrl() });
 
-	constructor(private model: string) {}
+	/** Every model name currently pulled locally — the live listing this provider selects from. */
+	async listModels(): Promise<string[]> {
+		return (await listModels()).map((m) => m.model);
+	}
 
 	// Delegates to chatStream and drains it rather than issuing its own `stream: false` request:
 	// the underlying `ollama` client only ever attaches an AbortController to the streaming code
 	// path (see `processStreamableRequest` in its source) — a plain non-streaming request has no
 	// signal at all, so it's the only way to make `chat()` respect `signal`.
-	async chat(messages: Message[], tools: Tool[], signal: AbortSignal): Promise<ModelResponse> {
-		const stream = this.chatStream(messages, tools, signal);
+	async chat(
+		model: string,
+		messages: Message[],
+		tools: Tool[],
+		signal: AbortSignal
+	): Promise<ModelResponse> {
+		const stream = this.chatStream(model, messages, tools, signal);
 		let next = await stream.next();
 		while (!next.done) {
 			next = await stream.next();
@@ -55,14 +64,12 @@ export class OllamaProvider implements ModelProvider {
 	}
 
 	async *chatStream(
+		model: string,
 		messages: Message[],
 		tools: Tool[],
 		signal: AbortSignal
 	): AsyncGenerator<string, ModelResponse, void> {
-		logger.debug(
-			{ model: this.model, messageCount: messages.length },
-			'sending streaming chat request'
-		);
+		logger.debug({ model, messageCount: messages.length }, 'sending streaming chat request');
 		logger.trace({ messages }, 'context');
 
 		// `ollama` doesn't accept an external AbortSignal directly — it only tracks its own
@@ -73,7 +80,7 @@ export class OllamaProvider implements ModelProvider {
 
 		try {
 			const stream = await this.ollama.chat({
-				model: this.model,
+				model,
 				messages: messages.map(toOllamaMessage),
 				tools: tools.map(toOllamaTool),
 				options: { num_ctx: NUM_CTX },
@@ -109,7 +116,7 @@ export class OllamaProvider implements ModelProvider {
 				'received streaming chat response'
 			);
 
-			return { content, toolCalls, model: this.model };
+			return { content, toolCalls, model };
 		} finally {
 			signal.removeEventListener('abort', onAbort);
 		}

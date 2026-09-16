@@ -5,11 +5,17 @@ import {
 	agentSubagents,
 	agentTools,
 	agents,
+	models,
 	sessions,
 	subjects,
 	tools
 } from '#lib/server/db/schema.js';
 import { insertSessionSchema } from '#lib/server/db/schemas.js';
+import {
+	PROVIDER_NAMES,
+	modelSelectionSchema
+} from '#lib/server/modelProviders/providerRegistry.js';
+import { getOrCreateModel } from '#lib/server/db/getOrCreateModel.js';
 import { and, desc, eq, inArray, isNull, type InferSelectModel } from 'drizzle-orm';
 import * as v from 'valibot';
 
@@ -42,7 +48,11 @@ export const getAgentsForSubject = query(
 export const getAgentById = query(v.pipe(v.string(), v.uuid()), async (id) => {
 	const agent = await db.query.agents.findFirst({
 		where: { id },
-		with: { agentTools: true, subagents: true }
+		with: {
+			agentTools: true,
+			subagents: true,
+			defaultModel: { with: { provider: true } }
+		}
 	});
 	if (!agent) {
 		error(404, 'Agent not found');
@@ -148,24 +158,29 @@ export const getAllSessions = query(async () => {
 		.select({
 			id: sessions.id,
 			name: sessions.name,
-			model: sessions.model,
+			model: models.name,
 			agentId: sessions.agentId,
 			agentName: agents.name,
 			createdAt: sessions.createdAt
 		})
 		.from(sessions)
 		.innerJoin(agents, eq(sessions.agentId, agents.id))
+		.innerJoin(models, eq(sessions.modelId, models.id))
 		.where(isNull(sessions.parentSessionId))
 		.orderBy(desc(sessions.createdAt));
 });
 
 /** Creates a new session for the given agent. */
 export const createSession = command(
-	v.pick(insertSessionSchema, ['agentId', 'name', 'model', 'systemPrompt']),
+	v.object({
+		...v.pick(insertSessionSchema, ['agentId', 'name', 'systemPrompt']).entries,
+		model: modelSelectionSchema
+	}),
 	async ({ agentId, name, model, systemPrompt }) => {
+		const modelId = await getOrCreateModel(model.provider, model.name);
 		const [session] = await db
 			.insert(sessions)
-			.values({ agentId, name, model, systemPrompt })
+			.values({ agentId, name, modelId, systemPrompt })
 			.returning();
 		await getAllSessions().refresh();
 		return session;
@@ -187,7 +202,10 @@ export const saveAgent = form(
 		systemPrompt: v.string(),
 		isSubagent: v.optional(v.boolean(), false),
 		subagentDescription: v.optional(v.string(), ''),
-		defaultModel: v.optional(v.string(), ''),
+		defaultModel: v.optional(v.object({ provider: v.string(), name: v.string() }), {
+			provider: '',
+			name: ''
+		}),
 		subjectId: v.optional(v.string(), ''),
 		toolIds: v.optional(v.array(v.pipe(v.string(), v.uuid())), []),
 		subagentIds: v.optional(v.array(v.pipe(v.string(), v.uuid())), [])
@@ -203,6 +221,23 @@ export const saveAgent = form(
 		toolIds,
 		subagentIds
 	}) => {
+		const hasProvider = isSubagent && defaultModel.provider.trim() !== '';
+		const hasModel = isSubagent && defaultModel.name.trim() !== '';
+		if (hasProvider !== hasModel) {
+			error(400, 'A default provider and default model must be set together, or not at all.');
+		}
+		if (
+			hasProvider &&
+			!PROVIDER_NAMES.includes(defaultModel.provider as (typeof PROVIDER_NAMES)[number])
+		) {
+			error(400, `Unknown provider: ${defaultModel.provider}`);
+		}
+
+		const defaultModelId =
+			hasProvider && hasModel
+				? await getOrCreateModel(defaultModel.provider, defaultModel.name)
+				: null;
+
 		// Sync, non-async callback — see the comment in deleteSession above.
 		const agent = db.transaction((tx) => {
 			const values = {
@@ -211,7 +246,7 @@ export const saveAgent = form(
 				isSubagent,
 				subagentDescription:
 					isSubagent && subagentDescription.trim() !== '' ? subagentDescription : null,
-				defaultModel: isSubagent && defaultModel.trim() !== '' ? defaultModel : null,
+				defaultModelId,
 				subjectId: subjectId.trim() === '' ? null : subjectId
 			};
 

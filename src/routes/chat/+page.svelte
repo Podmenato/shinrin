@@ -2,7 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { getAgents, getAllSessions, createSession } from '#lib/agents.remote.js';
-	import { getAvailableModels } from '#lib/ollamaAdmin.remote.js';
+	import { getModelOptions } from '#lib/models.remote.js';
+	import { encodeModelSelection, decodeModelSelection } from '#lib/models.js';
 	import { runAgent } from '#lib/sessions.remote.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
@@ -20,21 +21,24 @@
 
 	const agents = getAgents();
 	const sessions = getAllSessions();
-	const availableModels = $derived(await getAvailableModels());
+	const modelGroups = $derived(await getModelOptions());
 
 	let prompt = $state('');
 	let agentId = $state('');
-	let model = $state('');
+	let selectionValue = $state('');
 
 	const isSending = $derived(createSession.pending > 0);
-	const canStartChat = $derived(prompt.trim() !== '' && !!agentId && !!model && !isSending);
+	const canStartChat = $derived(
+		prompt.trim() !== '' && !!agentId && !!selectionValue && !isSending
+	);
 
 	async function startChat() {
 		if (!canStartChat) return;
 
 		const trimmed = prompt.trim();
+		const selection = decodeModelSelection(selectionValue);
 
-		const session = await createSession({ agentId, name: trimmed.slice(0, 60), model });
+		const session = await createSession({ agentId, name: trimmed.slice(0, 60), model: selection });
 		runAgent({ sessionId: session.id, prompt: trimmed }).catch(() => {
 			toast.error('Failed to send message');
 		});
@@ -45,7 +49,7 @@
 		agents.current?.find((a) => a.id === agentId)?.name ?? 'Select an agent'
 	);
 	const modelTriggerContent = $derived(
-		availableModels.find((m) => m.model === model)?.model ?? 'Select a model'
+		selectionValue ? decodeModelSelection(selectionValue).name : 'Select a model'
 	);
 
 	type Session = Awaited<ReturnType<typeof getAllSessions>>[number];
@@ -101,13 +105,21 @@
 
 					<Field.Field>
 						<Field.Label for="model">Model</Field.Label>
-						<Select.Root type="single" name="model" bind:value={model}>
+						<Select.Root type="single" name="model" bind:value={selectionValue}>
 							<Select.Trigger id="model" class="w-full">
 								{modelTriggerContent}
 							</Select.Trigger>
 							<Select.Content>
-								{#each availableModels as availableModel (availableModel.model)}
-									<Select.Item value={availableModel.model} label={availableModel.model} />
+								{#each modelGroups as group (group.provider)}
+									<Select.Group>
+										<Select.GroupHeading>{group.provider}</Select.GroupHeading>
+										{#each group.models as name (name)}
+											<Select.Item
+												value={encodeModelSelection({ provider: group.provider, name })}
+												label={name}
+											/>
+										{/each}
+									</Select.Group>
 								{/each}
 							</Select.Content>
 						</Select.Root>

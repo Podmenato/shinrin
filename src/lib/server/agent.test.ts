@@ -3,16 +3,29 @@ import { Agent } from './agent';
 import { ContextManager } from './contextManager';
 import { FakeModelProvider } from './modelProviders/fakeModelProvider';
 import { db } from './db/index';
-import { agents, sessions, messages, tools as toolsTable, messageToolCalls } from './db/schema';
+import {
+	agents,
+	sessions,
+	messages,
+	tools as toolsTable,
+	messageToolCalls,
+	providers,
+	models
+} from './db/schema';
 import type { Tool } from './tools/tool';
 import { ToolError } from './tools/tool';
 import { toJsonObjectSchema } from '#lib/json.js';
 
 async function seedSession() {
 	const [agent] = await db.insert(agents).values({ name: 'agent' }).returning();
+	const [provider] = await db.insert(providers).values({ name: 'test-provider' }).returning();
+	const [model] = await db
+		.insert(models)
+		.values({ providerId: provider.id, name: 'test-model' })
+		.returning();
 	const [session] = await db
 		.insert(sessions)
-		.values({ agentId: agent.id, name: 'session', model: 'test-model' })
+		.values({ agentId: agent.id, name: 'session', modelId: model.id })
 		.returning();
 	return session;
 }
@@ -33,6 +46,8 @@ afterEach(async () => {
 	await db.delete(sessions);
 	await db.delete(agents);
 	await db.delete(toolsTable);
+	await db.delete(models);
+	await db.delete(providers);
 });
 
 describe('Agent.run', () => {
@@ -40,7 +55,7 @@ describe('Agent.run', () => {
 		const session = await seedSession();
 		const ctx = new ContextManager('system prompt', session.id);
 		const provider = new FakeModelProvider([{ content: 'hello there' }]);
-		const agent = new Agent(session.agentId, provider, ctx, []);
+		const agent = new Agent(session.agentId, provider, 'test-model', ctx, []);
 
 		const result = await agent.run('hi', undefined, new AbortController().signal);
 
@@ -60,7 +75,7 @@ describe('Agent.run', () => {
 			{ content: '', toolCalls: [{ name: 'echo', args: { text: 'hi' } }] },
 			{ content: 'done' }
 		]);
-		const agent = new Agent(session.agentId, provider, ctx, [echo]);
+		const agent = new Agent(session.agentId, provider, 'test-model', ctx, [echo]);
 
 		const result = await agent.run('please echo', undefined, new AbortController().signal);
 
@@ -84,7 +99,7 @@ describe('Agent.run', () => {
 			{ content: '', toolCalls: [{ name: 'fail', args: {} }] },
 			{ content: 'recovered' }
 		]);
-		const agent = new Agent(session.agentId, provider, ctx, [failing]);
+		const agent = new Agent(session.agentId, provider, 'test-model', ctx, [failing]);
 
 		const result = await agent.run('try', undefined, new AbortController().signal);
 
@@ -100,7 +115,7 @@ describe('Agent.run', () => {
 			{ content: '', toolCalls: [{ name: 'does_not_exist', args: {} }] },
 			{ content: 'moved on' }
 		]);
-		const agent = new Agent(session.agentId, provider, ctx, []);
+		const agent = new Agent(session.agentId, provider, 'test-model', ctx, []);
 
 		const result = await agent.run('try', undefined, new AbortController().signal);
 
@@ -111,7 +126,7 @@ describe('Agent.run', () => {
 		const session = await seedSession();
 		const ctx = new ContextManager('system prompt', session.id);
 		const provider = new FakeModelProvider([{ content: '' }, { content: 'finally' }]);
-		const agent = new Agent(session.agentId, provider, ctx, []);
+		const agent = new Agent(session.agentId, provider, 'test-model', ctx, []);
 
 		const result = await agent.run('try', undefined, new AbortController().signal);
 
@@ -127,7 +142,7 @@ describe('Agent.run', () => {
 		const session = await seedSession();
 		const ctx = new ContextManager('system prompt', session.id);
 		const provider = new FakeModelProvider([]);
-		const agent = new Agent(session.agentId, provider, ctx, []);
+		const agent = new Agent(session.agentId, provider, 'test-model', ctx, []);
 		const controller = new AbortController();
 		controller.abort();
 
@@ -145,7 +160,7 @@ describe('Agent.run', () => {
 			toolCalls: [{ name: 'noop', args: {} }]
 		}));
 		const noop = fakeTool('noop', async () => 'ok');
-		const agent = new Agent(session.agentId, provider, ctx, [noop]);
+		const agent = new Agent(session.agentId, provider, 'test-model', ctx, [noop]);
 
 		const result = await agent.run('try', undefined, new AbortController().signal);
 
@@ -157,7 +172,7 @@ describe('Agent.run', () => {
 		const session = await seedSession();
 		const ctx = new ContextManager('system prompt', session.id);
 		const provider = new FakeModelProvider([{ content: 'streamed reply' }]);
-		const agent = new Agent(session.agentId, provider, ctx, []);
+		const agent = new Agent(session.agentId, provider, 'test-model', ctx, []);
 		const chunks: string[] = [];
 
 		const result = await agent.run(

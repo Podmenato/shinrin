@@ -17,7 +17,16 @@ export class FakeModelProvider implements ModelProvider {
 		this.responder = responder;
 	}
 
-	async chat(messages: Message[], tools: Tool[], signal: AbortSignal): Promise<ModelResponse> {
+	async listModels(): Promise<string[]> {
+		return [];
+	}
+
+	async chat(
+		model: string,
+		messages: Message[],
+		tools: Tool[],
+		signal: AbortSignal
+	): Promise<ModelResponse> {
 		this.calls.push({ messages, tools });
 		const call = this.callCount++;
 
@@ -35,11 +44,12 @@ export class FakeModelProvider implements ModelProvider {
 	}
 
 	async *chatStream(
+		model: string,
 		messages: Message[],
 		tools: Tool[],
 		signal: AbortSignal
 	): AsyncGenerator<string, ModelResponse, void> {
-		const response = await this.chat(messages, tools, signal);
+		const response = await this.chat(model, messages, tools, signal);
 		if (response.content) {
 			yield response.content;
 		}

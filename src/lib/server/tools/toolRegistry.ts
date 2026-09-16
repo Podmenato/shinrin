@@ -19,6 +19,7 @@ import { CreateMistakeTool } from './createMistakeTool';
 import { UpdateMistakeTool } from './updateMistakeTool';
 import { PresentQuizTool } from './presentQuizTool';
 import { SaveStoryTool } from './saveStoryTool';
+import type { ModelSelection } from '#lib/models.js';
 
 export type ToolContext = { agentId: string; subjectId: string | null; urls: string[] };
 
@@ -73,19 +74,19 @@ function subagentToolName(agentName: string): string {
 }
 
 /**
- * Resolves the agents assigned as subagents of `agentId` into callable tools. Each subagent
- * runs on its own `defaultModel` if set, falling back to `callerModel` (the calling agent's
- * model) otherwise. `parentSessionId` is the calling agent's session, attributed to whatever
+ * Resolves the agents assigned as subagents of `agentId` into callable tools. Each subagent runs
+ * on its own `defaultModel` pair if set, falling back to `callerSelection` (the calling agent's
+ * pair) otherwise. `parentSessionId` is the calling agent's session, attributed to whatever
  * session a subagent invocation spawns.
  */
 export async function getSubagentTools(
 	agentId: string,
-	callerModel: string,
+	callerSelection: ModelSelection,
 	parentSessionId: string
 ): Promise<Tool[]> {
 	const rows = await db.query.agentSubagents.findMany({
 		where: { agentId },
-		with: { subagent: true }
+		with: { subagent: { with: { defaultModel: { with: { provider: true } } } } }
 	});
 
 	return rows.map((row) => {
@@ -95,11 +96,18 @@ export async function getSubagentTools(
 			);
 		}
 
+		const selection: ModelSelection = row.subagent.defaultModel
+			? {
+					provider: row.subagent.defaultModel.provider.name as ModelSelection['provider'],
+					name: row.subagent.defaultModel.name
+				}
+			: callerSelection;
+
 		return new SubagentTool(
 			row.subagent.id,
 			subagentToolName(row.subagent.name),
 			row.subagent.subagentDescription,
-			row.subagent.defaultModel ?? callerModel,
+			selection,
 			parentSessionId
 		);
 	});

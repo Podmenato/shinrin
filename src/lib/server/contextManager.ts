@@ -117,7 +117,7 @@ export class ContextManager {
 		}));
 	}
 
-	async compact(provider: ModelProvider): Promise<void> {
+	async compact(provider: ModelProvider, model: string): Promise<void> {
 		if (this.history.length === 0) {
 			return;
 		}
@@ -137,7 +137,7 @@ export class ContextManager {
 		];
 
 		// TODO: hack to satisfy the type, needs to get an actual signal
-		const response = await provider.chat(messages, [], new AbortController().signal);
+		const response = await provider.chat(model, messages, [], new AbortController().signal);
 
 		await db
 			.update(sessionsTable)

@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { saveQuickAsk, type QuickAskRow } from '#lib/quickAsks.remote.js';
+	import { saveQuickAsk, getQuickAskById } from '#lib/quickAsks.remote.js';
 	import { getAgents } from '#lib/agents.remote.js';
-	import { getAvailableModels } from '#lib/ollamaAdmin.remote.js';
+	import { getModelOptions } from '#lib/models.remote.js';
+	import { encodeModelSelection, decodeModelSelection, type ModelSelection } from '#lib/models.js';
 	import { getDecks, getCardStates } from '#lib/anki.remote.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
@@ -16,10 +17,10 @@
 	import { isHttpError } from '@sveltejs/kit';
 	import { toast } from 'svelte-sonner';
 
-	const { quickAsk }: { quickAsk?: QuickAskRow } = $props();
+	const { quickAsk }: { quickAsk?: Awaited<ReturnType<typeof getQuickAskById>> } = $props();
 
 	const allAgents = $derived(await getAgents());
-	const availableModels = $derived(await getAvailableModels());
+	const modelGroups = $derived(await getModelOptions());
 	const cardStates = $derived(await getCardStates());
 
 	// Get decks can fail when anki is turned off
@@ -27,16 +28,23 @@
 	const decks = $derived(decksQuery.current ?? (quickAsk?.deck ? [quickAsk.deck] : []));
 
 	let agentId = $derived(quickAsk?.agentId ?? '');
-	let model = $derived(quickAsk?.model ?? '');
+	let selectionValue = $derived(
+		quickAsk
+			? encodeModelSelection({
+					provider: quickAsk.model.provider.name as ModelSelection['provider'],
+					name: quickAsk.model.name
+				})
+			: ''
+	);
 	let deck = $derived(quickAsk?.deck ?? '');
 	let cardState = $derived(quickAsk?.state ?? '');
+
+	const selection = $derived(selectionValue ? decodeModelSelection(selectionValue) : null);
 
 	const agentTriggerContent = $derived(
 		allAgents.find((a) => a.id === agentId)?.name ?? 'Select an agent'
 	);
-	const modelTriggerContent = $derived(
-		availableModels.find((m) => m.model === model)?.model ?? 'Select a model'
-	);
+	const modelTriggerContent = $derived(selection?.name ?? 'Select a model');
 	const deckTriggerContent = $derived(deck || 'Select a deck');
 	const stateTriggerContent = $derived(cardState || 'Select a state');
 
@@ -109,20 +117,34 @@
 
 				<Field.Field>
 					<Field.Label for="model">Model</Field.Label>
-					<Select.Root
-						type="single"
-						name={quickAskForm.fields.model.as('hidden', '').name}
-						bind:value={model}
-					>
+					<Select.Root type="single" bind:value={selectionValue}>
 						<Select.Trigger id="model" class="w-full">
 							{modelTriggerContent}
 						</Select.Trigger>
 						<Select.Content>
-							{#each availableModels as availableModel (availableModel.model)}
-								<Select.Item value={availableModel.model} label={availableModel.model} />
+							{#each modelGroups as group (group.provider)}
+								<Select.Group>
+									<Select.GroupHeading>{group.provider}</Select.GroupHeading>
+									{#each group.models as name (name)}
+										<Select.Item
+											value={encodeModelSelection({ provider: group.provider, name })}
+											label={name}
+										/>
+									{/each}
+								</Select.Group>
 							{/each}
 						</Select.Content>
 					</Select.Root>
+					<input
+						type="hidden"
+						name={quickAskForm.fields.model.provider.as('hidden', '').name}
+						value={selection?.provider ?? ''}
+					/>
+					<input
+						type="hidden"
+						name={quickAskForm.fields.model.name.as('hidden', '').name}
+						value={selection?.name ?? ''}
+					/>
 					<Field.Error errors={quickAskForm.fields.model.issues()} />
 				</Field.Field>
 			</div>

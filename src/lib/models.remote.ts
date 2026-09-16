@@ -1,10 +1,5 @@
 import { query } from '$app/server';
+import { listAllModelOptions } from '#lib/server/modelProviders/providerRegistry.js';
 
-/** Returns the list of available model names from Ollama. */
-export const getModels = query(async () => {
-	// TODO: make provider independent
-	const res = await fetch('http://localhost:11434/api/tags');
-	if (!res.ok) throw new Error('Could not reach Ollama');
-	const data = (await res.json()) as { models: { name: string }[] };
-	return data.models.map((m) => m.name);
-});
+/** Every provider's currently selectable models, grouped by provider — see listAllModelOptions. */
+export const getModelOptions = query(listAllModelOptions);

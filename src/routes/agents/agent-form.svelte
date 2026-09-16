@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { saveAgent, getAssignableSubagents, type Agent } from '#lib/agents.remote.js';
+	import { saveAgent, getAssignableSubagents, getAgentById } from '#lib/agents.remote.js';
 	import { getTools } from '#lib/tools.remote.js';
 	import { getSubjects } from '#lib/subjects.remote.js';
-	import { getAvailableModels } from '#lib/ollamaAdmin.remote.js';
+	import { getModelOptions } from '#lib/models.remote.js';
+	import { encodeModelSelection, decodeModelSelection, type ModelSelection } from '#lib/models.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
@@ -20,21 +21,29 @@
 	import { resolve } from '$app/paths';
 	import { isHttpError } from '@sveltejs/kit';
 
-	const { agent }: { agent?: Agent & { toolIds: string[]; subagentIds: string[] } } = $props();
+	const { agent }: { agent?: Awaited<ReturnType<typeof getAgentById>> } = $props();
 
 	const allTools = $derived(await getTools());
 	const allSubjects = $derived(await getSubjects());
-	const availableModels = $derived(await getAvailableModels());
+	const modelGroups = $derived(await getModelOptions());
 
 	let toolsOpen = $state(false);
 	let subagentsOpen = $state(false);
 
 	let isSubagent = $derived(agent?.isSubagent ?? false);
-	let defaultModel = $derived(agent?.defaultModel ?? '');
-	let subjectId = $derived(agent?.subjectId ?? '');
-	const modelTriggerContent = $derived(
-		availableModels.find((m) => m.model === defaultModel)?.model ?? 'Use the calling agent’s model'
+	let defaultSelectionValue = $derived(
+		agent?.defaultModel
+			? encodeModelSelection({
+					provider: agent.defaultModel.provider.name as ModelSelection['provider'],
+					name: agent.defaultModel.name
+				})
+			: ''
 	);
+	let subjectId = $derived(agent?.subjectId ?? '');
+	const defaultSelection = $derived(
+		defaultSelectionValue ? decodeModelSelection(defaultSelectionValue) : null
+	);
+	const modelTriggerContent = $derived(defaultSelection?.name ?? 'Use the calling agent’s model');
 	const subjectTriggerContent = $derived(
 		allSubjects.find((s) => s.id === subjectId)?.name ?? 'No subject'
 	);
@@ -148,20 +157,35 @@
 
 				<Field.Field>
 					<Field.Label for="defaultModel">Model</Field.Label>
-					<Select.Root
-						type="single"
-						name={agentForm.fields.defaultModel.as('hidden', '').name}
-						bind:value={defaultModel}
-					>
+					<Select.Root type="single" bind:value={defaultSelectionValue}>
 						<Select.Trigger id="defaultModel" class="w-full">
 							{modelTriggerContent}
 						</Select.Trigger>
 						<Select.Content>
-							{#each availableModels as model (model.model)}
-								<Select.Item value={model.model} label={model.model} />
+							<Select.Item value="" label="Use the calling agent’s model" />
+							{#each modelGroups as group (group.provider)}
+								<Select.Group>
+									<Select.GroupHeading>{group.provider}</Select.GroupHeading>
+									{#each group.models as name (name)}
+										<Select.Item
+											value={encodeModelSelection({ provider: group.provider, name })}
+											label={name}
+										/>
+									{/each}
+								</Select.Group>
 							{/each}
 						</Select.Content>
 					</Select.Root>
+					<input
+						type="hidden"
+						name={agentForm.fields.defaultModel.provider.as('hidden', '').name}
+						value={defaultSelection?.provider ?? ''}
+					/>
+					<input
+						type="hidden"
+						name={agentForm.fields.defaultModel.name.as('hidden', '').name}
+						value={defaultSelection?.name ?? ''}
+					/>
 					<Field.Error errors={agentForm.fields.defaultModel.issues()} />
 				</Field.Field>
 			{/if}

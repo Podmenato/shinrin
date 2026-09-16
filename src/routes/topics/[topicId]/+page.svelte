@@ -4,7 +4,8 @@
 	import { getTopicById, type Topic } from '#lib/topics.remote.js';
 	import { createSession, getAgentsForSubject } from '#lib/agents.remote.js';
 	import { runAgent } from '#lib/sessions.remote.js';
-	import { getAvailableModels } from '#lib/ollamaAdmin.remote.js';
+	import { getModelOptions } from '#lib/models.remote.js';
+	import { encodeModelSelection, decodeModelSelection } from '#lib/models.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
@@ -20,19 +21,19 @@
 	const { topicId } = $derived(params);
 
 	const topic = $derived(await getTopicById(topicId));
-	const availableModels = $derived(await getAvailableModels());
+	const modelGroups = $derived(await getModelOptions());
 	const agents = $derived(await getAgentsForSubject(topic.subjectId));
 
 	let agentId = $state('');
-	let model = $state('');
+	let selectionValue = $state('');
 	const isStarting = $derived(createSession.pending > 0);
-	const isStartDisabled = $derived(!agentId || !model || isStarting);
+	const isStartDisabled = $derived(!agentId || !selectionValue || isStarting);
 
 	const agentTriggerContent = $derived(
 		agents.find((a) => a.id === agentId)?.name ?? 'Select an agent'
 	);
 	const modelTriggerContent = $derived(
-		availableModels.find((m) => m.model === model)?.model ?? 'Select a model'
+		selectionValue ? decodeModelSelection(selectionValue).name : 'Select a model'
 	);
 
 	function buildStudySystemPrompt(topic: Topic): string {
@@ -57,7 +58,7 @@
 			const session = await createSession({
 				agentId,
 				name: `Studying: ${topic.topic}`,
-				model,
+				model: decodeModelSelection(selectionValue),
 				systemPrompt: buildStudySystemPrompt(topic)
 			});
 
@@ -131,13 +132,21 @@
 
 				<Field.Field class="sm:max-w-xs">
 					<Field.Label for="model">Model</Field.Label>
-					<Select.Root type="single" name="model" bind:value={model}>
+					<Select.Root type="single" name="model" bind:value={selectionValue}>
 						<Select.Trigger id="model" class="w-full">
 							{modelTriggerContent}
 						</Select.Trigger>
 						<Select.Content>
-							{#each availableModels as availableModel (availableModel.model)}
-								<Select.Item value={availableModel.model} label={availableModel.model} />
+							{#each modelGroups as group (group.provider)}
+								<Select.Group>
+									<Select.GroupHeading>{group.provider}</Select.GroupHeading>
+									{#each group.models as name (name)}
+										<Select.Item
+											value={encodeModelSelection({ provider: group.provider, name })}
+											label={name}
+										/>
+									{/each}
+								</Select.Group>
 							{/each}
 						</Select.Content>
 					</Select.Root>

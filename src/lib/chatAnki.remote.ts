@@ -3,10 +3,10 @@ import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { db } from '#lib/server/db/index.js';
 import { Agent } from '#lib/server/agent.js';
-import { OllamaProvider } from '#lib/server/modelProviders/ollamaProvider.js';
 import { AddSentenceNoteTool } from '#lib/server/tools/anki/addSentenceNoteTool.js';
 import { ankiRequest } from '#lib/server/tools/anki/ankiClient.js';
 import type { JsonValue } from '#lib/json.js';
+import type { ModelSelection } from '#lib/models.js';
 
 // TODO: context actions will be redone, review if this still makes sense after
 const generatedCardSchema = v.object({
@@ -54,7 +54,7 @@ export const autoAddSentenceCard = command(
 	async ({ sessionId, selectedText, messageContent }) => {
 		const session = await db.query.sessions.findFirst({
 			where: { id: sessionId },
-			with: { agent: { with: { subject: true } } }
+			with: { agent: { with: { subject: true } }, model: { with: { provider: true } } }
 		});
 		if (!session) {
 			error(404, 'Session not found');
@@ -74,12 +74,14 @@ export const autoAddSentenceCard = command(
 		}
 
 		const signal = new AbortController().signal;
-		const provider = new OllamaProvider(session.model);
+		const selection: ModelSelection = {
+			provider: session.model.provider.name as ModelSelection['provider'],
+			name: session.model.name
+		};
 		const agent = await Agent.create(
 			subject.autoAddAgentId,
 			'Automatic sentence card',
-			session.model,
-			provider,
+			selection,
 			sessionId
 		);
 

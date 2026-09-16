@@ -6,6 +6,9 @@ import { ANKI_CARD_STATES } from '#lib/server/tools/anki/findQuery.js';
 import { FindTool } from '#lib/server/tools/anki/findTool.js';
 import { CardsInfoTool } from '#lib/server/tools/anki/cardsInfoTool.js';
 import { createSession } from '#lib/agents.remote.js';
+import { modelSelectionSchema } from '#lib/server/modelProviders/providerRegistry.js';
+import { getOrCreateModel } from '#lib/server/db/getOrCreateModel.js';
+import type { ProviderName } from '#lib/server/modelProviders/providerRegistry.js';
 import { desc, eq, getColumns, type InferSelectModel } from 'drizzle-orm';
 import type { JsonValue } from '#lib/json.js';
 import * as v from 'valibot';
@@ -22,17 +25,17 @@ export const getQuickAsks = query(async (): Promise<QuickAsk[]> => {
 		.orderBy(desc(quickAsks.updatedAt));
 });
 
-/** Returns a single quick ask by id. */
-export const getQuickAskById = query(
-	v.pipe(v.string(), v.uuid()),
-	async (id): Promise<QuickAskRow> => {
-		const quickAsk = await db.query.quickAsks.findFirst({ where: { id } });
-		if (!quickAsk) {
-			error(404, 'Quick ask not found');
-		}
-		return quickAsk;
+/** Returns a single quick ask by id, with its model+provider joined for the edit form's picker. */
+export const getQuickAskById = query(v.pipe(v.string(), v.uuid()), async (id) => {
+	const quickAsk = await db.query.quickAsks.findFirst({
+		where: { id },
+		with: { model: { with: { provider: true } } }
+	});
+	if (!quickAsk) {
+		error(404, 'Quick ask not found');
 	}
-);
+	return quickAsk;
+});
 
 /** Creates or updates a quick ask preset. */
 export const saveQuickAsk = form(
@@ -40,7 +43,7 @@ export const saveQuickAsk = form(
 		id: v.optional(v.pipe(v.string(), v.uuid())),
 		name: v.pipe(v.string(), v.nonEmpty()),
 		agentId: v.pipe(v.string(), v.uuid()),
-		model: v.pipe(v.string(), v.nonEmpty()),
+		model: modelSelectionSchema,
 		deck: v.pipe(v.string(), v.nonEmpty()),
 		state: v.picklist(ANKI_CARD_STATES),
 		days: v.optional(v.string(), ''),
@@ -52,7 +55,8 @@ export const saveQuickAsk = form(
 			error(400, 'Days must be a positive integer');
 		}
 
-		const values = { name, agentId, model, deck, state, days: daysValue, prompt };
+		const modelId = await getOrCreateModel(model.provider, model.name);
+		const values = { name, agentId, modelId, deck, state, days: daysValue, prompt };
 
 		let quickAsk;
 		if (id) {
@@ -97,7 +101,10 @@ export const deleteQuickAsk = command(v.pipe(v.string(), v.uuid()), async (id) =
 export const runQuickAsk = command(
 	v.pipe(v.string(), v.uuid()),
 	async (id): Promise<{ session: { id: string }; seedPrompt: string }> => {
-		const quickAsk = await db.query.quickAsks.findFirst({ where: { id } });
+		const quickAsk = await db.query.quickAsks.findFirst({
+			where: { id },
+			with: { model: { with: { provider: true } } }
+		});
 		if (!quickAsk) {
 			error(404, 'Quick ask not found');
 		}
@@ -114,7 +121,7 @@ export const runQuickAsk = command(
 		const session = await createSession({
 			agentId: quickAsk.agentId,
 			name: quickAsk.name,
-			model: quickAsk.model
+			model: { provider: quickAsk.model.provider.name as ProviderName, name: quickAsk.model.name }
 		});
 
 		return { session, seedPrompt };
