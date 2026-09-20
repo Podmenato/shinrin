@@ -8,12 +8,12 @@
 	import HouseIcon from '@lucide/svelte/icons/house';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import BotIcon from '@lucide/svelte/icons/bot';
-	import ServerIcon from '@lucide/svelte/icons/server';
 	import CircleXIcon from '@lucide/svelte/icons/circle-x';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import BookMarkedIcon from '@lucide/svelte/icons/book-marked';
 	import LibraryBigIcon from '@lucide/svelte/icons/library-big';
 	import ZapIcon from '@lucide/svelte/icons/zap';
+	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import SunIcon from '@lucide/svelte/icons/sun';
 	import MoonIcon from '@lucide/svelte/icons/moon';
 
@@ -27,7 +27,7 @@
 		{ title: 'Stories', href: resolve('/stories'), icon: BookMarkedIcon },
 		{ title: 'Subjects', href: resolve('/subjects'), icon: LibraryBigIcon }
 	];
-	const footerItems = [{ title: 'Ollama Settings', href: resolve('/ollama'), icon: ServerIcon }];
+	const footerItems = [{ title: 'Settings', href: resolve('/settings'), icon: SettingsIcon }];
 </script>
 
 <Sidebar.Root>

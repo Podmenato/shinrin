@@ -24,6 +24,13 @@ const updatedAt = () =>
 export const providers = sqliteTable('providers', {
 	id: generateUUID(),
 	name: text().notNull().unique(),
+	// Per-provider settings a user can tune from the UI (e.g. Ollama's numCtx) — null means "use
+	// that provider's own defaults". Shape isn't uniform across providers (Anthropic's settings
+	// won't look like Ollama's), so this is validated app-side against each provider's own valibot
+	// schema (see getProviderConfig) rather than modeled as SQL columns. Deployment-level config and
+	// secrets (base URLs, API keys) stay in env vars, same as OLLAMA_BASE_URL/ANKI_CONNECT_URL — not
+	// stored here.
+	config: text({ mode: 'json' }),
 	createdAt: createdAt(),
 	updatedAt: updatedAt()
 });

@@ -1,15 +1,22 @@
 import { Ollama, type Message as OllamaMessage, type Tool as OllamaTool } from 'ollama';
+import * as v from 'valibot';
 import type { ModelProvider, ModelResponse } from './modelProvider';
 import type { Message } from '../contextManager';
 import type { Tool } from '../tools/tool';
 import { logger } from '../logger';
 import { ollamaBaseUrl } from '../env';
 import { listModels } from '../ollamaAdmin';
+import { getProviderConfig } from '../db/providerSettings';
 
 // Ollama defaults to a small runtime context window regardless of what the
 // model itself supports, and silently drops the oldest turns once it fills
 // rather than erroring — set an explicit budget instead of leaving it unset.
-const NUM_CTX = 16384;
+// User-tunable from /settings; this is only the fallback when never configured.
+export const ollamaSettingsSchema = v.object({
+	numCtx: v.pipe(v.number(), v.integer(), v.minValue(1))
+});
+export type OllamaSettings = v.InferOutput<typeof ollamaSettingsSchema>;
+export const DEFAULT_OLLAMA_SETTINGS: OllamaSettings = { numCtx: 16384 };
 
 function toOllamaMessage(message: Message): OllamaMessage {
 	return {
@@ -79,11 +86,16 @@ export class OllamaProvider implements ModelProvider {
 		signal.addEventListener('abort', onAbort, { once: true });
 
 		try {
+			const { numCtx } = await getProviderConfig(
+				'ollama',
+				ollamaSettingsSchema,
+				DEFAULT_OLLAMA_SETTINGS
+			);
 			const stream = await this.ollama.chat({
 				model,
 				messages: messages.map(toOllamaMessage),
 				tools: tools.map(toOllamaTool),
-				options: { num_ctx: NUM_CTX },
+				options: { num_ctx: numCtx },
 				stream: true
 			});
 
