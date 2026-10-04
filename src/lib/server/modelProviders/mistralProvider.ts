@@ -210,14 +210,16 @@ export class MistralProvider implements ModelProvider {
 		}
 
 		const { data = [] } = await client.models.list();
-		return data
-			.filter(
-				(model) =>
-					'capabilities' in model &&
-					model.capabilities.completionChat &&
-					model.capabilities.functionCalling
-			)
-			.map((model) => model.id);
+		// One flatMap rather than filter + map: the `'capabilities' in model` check is what narrows
+		// away the SDK's Unknown card type (which has no `id`), and that narrowing doesn't carry
+		// from a plain filter callback over to the next map.
+		return data.flatMap((model) =>
+			'capabilities' in model &&
+			model.capabilities.completionChat &&
+			model.capabilities.functionCalling
+				? [model.id]
+				: []
+		);
 	}
 
 	// Delegates to chatStream and drains it — see AnthropicProvider.chat.
