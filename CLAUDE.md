@@ -70,8 +70,10 @@ WAL')` `node:sqlite`'s `DatabaseSync` actually exposes.
   **`r.one.X(...)` defaults to `optional: true` regardless of the underlying
   FK's own `.notNull()`** (unlike v1, which inferred nullability from the FK
   column itself) — every `one()` relation in this schema sets
-  `optional: false` explicitly except `agents.subject`, the one genuinely
-  nullable FK in the whole schema (`agents.subjectId` has no `.notNull()`).
+  `optional: false` explicitly except the two backed by a genuinely
+  nullable FK: `agents.subject` (`agents.subjectId` has no `.notNull()`) and
+  `messageToolCalls.tool` (`messageToolCalls.toolId` is set only when the
+  call was to a built-in tool — see "Tool calls and results" below).
   Forgetting this on a new relation means TypeScript treats a
   guaranteed-present joined row as possibly `null`/`undefined` everywhere
   it's used — not silently wrong, but easy to miss until `pnpm check` flags
@@ -133,6 +135,34 @@ port. `messageToolCalls.args`(Postgres`jsonb`) is `text({ mode: 'json'
 since 3.38 (2022) and a binary JSONB storage optimization since 3.45
 (2024), so this is not a capability loss for the debug-querying use case
 that originally motivated `jsonb`, just a different storage encoding.
+- **Tool calls and results** (changed 2026-10-04): a `role: 'tool'` message
+  points at the exact call it answers via `messages.toolCallId` →
+  `messageToolCalls.id`. Before this, the link was implicit (match by name
+  and position), which broke whenever the two didn't line up 1:1.
+  `messageToolCalls` is a record of exactly what the model called, not a
+  reference to current config: `name` is stored verbatim (NOT NULL), and
+  `toolId` is a nullable FK set only when the name is a built-in tool — so
+  subagent calls (`subagent_<agent name>`, not in `tools`) and calls to a
+  name the model made up are saved too (both were silently dropped before).
+  Ids follow the usual external-id pattern: `id` is always our own uuid,
+  assigned by `Agent.run()`; `providerCallId` holds the provider's own id
+  when it assigns one (Anthropic's `toolu_...`, null for Ollama), and
+  [anthropicProvider.ts](src/lib/server/modelProviders/anthropicProvider.ts)
+  replays `providerCallId ?? id` as the `tool_use.id`, so a rebuilt turn
+  matches what the model emitted and stays byte-identical across runs (prompt
+  cache). An unknown tool gets a real, linked `Tool not found: <name>`
+  result. Results saved before this change were backfilled by the
+  `link_tool_results_to_calls` migration; old subagent results stay unlinked
+  (their calls were never saved) and are dropped on replay.
+  Anthropic's thinking blocks are deliberately **not** persisted — they
+  travel only in-memory on `Message.providerContent` within one run. A
+  thinking block's signature is bound to the exact conversation prefix that
+  produced it (system prompt, `tools`, earlier messages), and in this app
+  that prefix often changes between runs (`fetch_url`'s description lists
+  the conversation's URLs; agent edits; compaction), so a stored copy would
+  frequently be rejected on replay. Revisit (with Anthropic's `drop_block`
+  binding beta) only if losing thinking across runs actually shows up as a
+  problem.
 - **Dev reset**: [clean.ts](src/lib/server/db/clean.ts) deletes the sqlite
   file (plus `-wal`/`-shm` sidecars, since `journal_mode = WAL` is set in
   [db/index.ts](src/lib/server/db/index.ts)) rather than dropping/recreating
@@ -1107,11 +1137,19 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
   you need to log values for debugging, use `$inspect`. If you need to
   observe something external to Svelte, use `createSubscriber`. A default
   value derived from async-loaded data (e.g. the initially-selected tab)
-  should be a plain `$state(...)` initializer computed once from the
-  resolved value, not an `$effect` that writes state — see
-  [stories/[storyId]/+page.svelte](src/routes/stories/[storyId]/+page.svelte)
-  for the pattern (`let activeSubjectId = $state(story.content[0]?.subjectId ?? '')`
-  right after the awaited `$derived`, no effect needed).
+  should never be an `$effect` that writes state. Use a **writable
+  `$derived`** (Svelte 5.25+: a `let` `$derived` can be reassigned, and
+  re-derives when its dependencies change) — see `selectionValue` in
+  [chat/[sessionId]/+page.svelte](src/routes/chat/[sessionId]/+page.svelte).
+  A plain `$state(...)` initializer only captures the _first_ value
+  (svelte-check warns: `state_referenced_locally`), which is a real bug on a
+  dynamic route: SvelteKit reuses the same page component when only the
+  params change, so navigating `/chat/a` → `/chat/b` kept session A's model
+  in the picker. `$state(...)` is only fine when the component is
+  guaranteed to remount for a new value.
+  [stories/[storyId]/+page.svelte](src/routes/stories/[storyId]/+page.svelte)'s
+  `activeSubjectId = $state(...)` still uses the old pattern and likely has
+  the same bug navigating between stories — not yet fixed.
 - Component library is **shadcn-svelte** (built on `bits-ui`). Installed
   components live in `src/lib/components/ui/*` (e.g. `button`, `card`,
   `sidebar`, `select`, `field`, `empty`, `spinner`, ...). When a screen
@@ -1231,12 +1269,38 @@ prepare pnpm@... --activate` — no reason to install corepack first just to
   under TypeScript-aware tooling (tsx, vite), not plain `node` (confirmed by
   testing directly — `Cannot find module '.../createDb'`). Instead it builds
   its own minimal connection from `dbPath`/`currentMode` (`#lib/server/env.ts`,
-  single-file, no further relative imports of its own). Verified this
-  actually runs correctly against the real prod db (a clean no-op, since it
-  was already migrated) — also confirmed it genuinely can't run against a
-  dev-mode db, since `pnpm dev` uses `drizzle-kit push --force` (no
-  migration-tracking table at all), a different, incompatible schema-sync
-  strategy by design — the two were never meant to interact.
+  single-file, no further relative imports of its own). Confirmed it
+  genuinely can't run against a dev-mode db, since `pnpm dev` uses
+  `drizzle-kit push --force` (no migration-tracking table at all), a
+  different, incompatible schema-sync strategy by design — the two were
+  never meant to interact. (An earlier "verified against the real prod db"
+  check here was a no-op — nothing was pending — so it never exercised the
+  table-rebuild path below.)
+- **`migrate.js` opens its connection with foreign keys off
+  (`enableForeignKeyConstraints: false`), then runs `PRAGMA
+foreign_key_check` after migrating and exits non-zero on any violation —
+  without this, deploying wipes data.** Found 2026-10-04 by running the
+  pending migrations against a copy of the real prod db: it lost every
+  message (741) and 35 of 39 sessions. drizzle's `migrateSync`
+  (`drizzle-orm/sqlite-core/async/session.js`) wraps **all** pending
+  migrations in a single `BEGIN…COMMIT`, and SQLite ignores `PRAGMA
+foreign_keys=OFF` inside a transaction — so the `PRAGMA foreign_keys=OFF`
+  lines `drizzle-kit generate` writes around every table rebuild do
+  nothing, and `node:sqlite` enables foreign keys by default. A rebuild's
+  `DROP TABLE` then fires `ON DELETE CASCADE` on every child table:
+  `backfill_and_tighten_models` rebuilding `sessions` deleted all
+  `messages` (`session_id` cascade) and every subagent session
+  (`parent_session_id` cascade). Disabling enforcement on the connection,
+  before the migrator's transaction starts, is SQLite's own documented
+  procedure for table rebuilds; the post-migration check runs after the
+  commit, so it can't roll anything back — it fails the container start
+  instead of letting the app run on a broken db. Re-run against a fresh
+  copy with this fix: nothing lost, all checks clean. **Any new migration
+  that rebuilds a table relies on this** — and since the dev db (`push`)
+  and the test db (`push`) never run migrations at all, test a migration
+  against a copy of the prod db (copy it out of the
+  `shinrin_shinrin-data` volume with a throwaway container while the app
+  is stopped) before shipping it.
 - **`scripts/server.ts` → `scripts/server.js`, plain `node`, no `tsx`** —
   the file had zero actual TypeScript syntax, so this was a pure rename, not
   a rewrite. Chained with the migration script in the image's `CMD`:
