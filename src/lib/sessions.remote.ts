@@ -5,6 +5,7 @@ import { db } from '#lib/server/db/index.js';
 import { sessions } from '#lib/server/db/schema.js';
 import { Agent } from '#lib/server/agent.js';
 import { modelSelectionSchema } from '#lib/server/modelProviders/providerRegistry.js';
+import { AnthropicProviderError } from '#lib/server/modelProviders/anthropicProvider.js';
 import { getOrCreateModel } from '#lib/server/db/getOrCreateModel.js';
 import { sessionRegistry } from '#lib/server/sessionRegistry.js';
 import { messageRegistry } from '#lib/server/messageRegistry.js';
@@ -32,7 +33,7 @@ async function getSessionMessages(sessionId: string) {
 	const rows = await db.query.messages.findMany({
 		where: { sessionId },
 		orderBy: { createdAt: 'asc' },
-		with: { messageToolCalls: { with: { tool: true } } }
+		with: { messageToolCalls: true }
 	});
 
 	return rows
@@ -44,7 +45,8 @@ async function getSessionMessages(sessionId: string) {
 			toolName: m.toolName ?? undefined,
 			createdAt: m.createdAt,
 			toolCalls: m.messageToolCalls.map((tc) => ({
-				name: tc.tool.name,
+				id: tc.id,
+				name: tc.name,
 				args: tc.args as Record<string, JsonValue>
 			}))
 		}));
@@ -95,6 +97,11 @@ export const runAgent = command(runSchema, async ({ sessionId, prompt }) => {
 			(delta) => sessionRegistry.append(sessionId, delta),
 			controller.signal
 		);
+	} catch (e) {
+		if (e instanceof AnthropicProviderError) {
+			error(500, e.message);
+		}
+		throw e;
 	} finally {
 		sessionRegistry.end(sessionId);
 	}

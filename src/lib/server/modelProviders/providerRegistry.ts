@@ -1,12 +1,13 @@
 import * as v from 'valibot';
 import type { ModelProvider } from './modelProvider';
 import { OllamaProvider } from './ollamaProvider';
+import { AnthropicProvider } from './anthropicProvider';
 import { logger } from '../logger';
 
 /** Every registered provider name — the one hand-written source of truth. Everything else
  * (the type, the registry's required shape, valibot validation) is derived from or checked
  * against this array, not the other way around. */
-export const PROVIDER_NAMES = ['ollama'] as const;
+export const PROVIDER_NAMES = ['ollama', 'anthropic'] as const;
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 
 // One instance per provider, not per model — a provider client is provider-level state (host,
@@ -14,8 +15,13 @@ export type ProviderName = (typeof PROVIDER_NAMES)[number];
 // (provider, model) pair, so there's no factory function here, just a lookup table. Typing this
 // as Record<ProviderName, ModelProvider> means TypeScript itself catches a forgotten or stray
 // entry here the moment PROVIDER_NAMES changes — no separate check needed.
+//
+// Instantiated eagerly at module scope, so AnthropicProvider's constructor can't take an API key
+// or config — both are read lazily per request instead (see anthropicApiKey()/getProviderConfig()
+// calls inside anthropicProvider.ts), exactly like OllamaProvider already reads its num_ctx setting.
 const registry: Record<ProviderName, ModelProvider> = {
-	ollama: new OllamaProvider()
+	ollama: new OllamaProvider(),
+	anthropic: new AnthropicProvider()
 };
 
 /** Valibot schema for a `ModelSelection` — the one shape used at every command/form boundary

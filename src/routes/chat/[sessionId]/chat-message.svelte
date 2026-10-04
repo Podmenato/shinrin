@@ -20,7 +20,7 @@
 				<Markdown content={message.content} />
 			</div>
 		{/if}
-		{#each message.toolCalls as toolCall (toolCall.name)}
+		{#each message.toolCalls as toolCall (toolCall.id)}
 			<!--TODO: what if result fails ? needs some error handling -->
 			{#if toolCall.name === 'present_quiz'}
 				<Quiz args={toolCall.args} />

@@ -39,3 +39,11 @@ export function ollamaBaseUrl(): string {
 export function ankiConnectUrl(): string {
 	return process.env.ANKI_CONNECT_URL ?? 'http://localhost:8765';
 }
+
+// Deliberately never stored in `providers.config` or anywhere else in the database — this app has
+// no auth and binds 0.0.0.0, so a credential sitting in a LAN-readable settings page would be
+// dangerous. `undefined` (unset) is a normal state, not an error: AnthropicProvider.listModels
+// treats it as "Anthropic simply isn't configured" rather than throwing.
+export function anthropicApiKey(): string | undefined {
+	return process.env.ANTHROPIC_API_KEY;
+}

@@ -146,18 +146,29 @@ export const messages = sqliteTable('messages', {
 	role: text('role').notNull(),
 	content: text('content').notNull(),
 	toolName: text('tool_name'),
+	// Set only on `role: 'tool'` rows — the call this message is the result of.
+	toolCallId: text('tool_call_id').references((): AnySQLiteColumn => messageToolCalls.id, {
+		onDelete: 'cascade'
+	}),
 	model: text('model'),
 	createdAt: createdAt()
 });
 
+// A record of exactly what the model called, independent of current config: `name` is stored
+// verbatim rather than read through `toolId`, because not every call is a built-in tool (subagent
+// calls, or a name the model made up) and a subagent's tool name is derived from its agent's
+// current name, which can change.
 export const messageToolCalls = sqliteTable('message_tool_calls', {
 	id: generateUUID(),
 	messageId: text('message_id')
 		.notNull()
 		.references(() => messages.id, { onDelete: 'cascade' }),
-	toolId: text('tool_id')
-		.notNull()
-		.references(() => tools.id),
+	name: text().notNull(),
+	// The provider's own id for this call, when it assigns one (Anthropic's `toolu_...`), replayed
+	// back to that provider instead of our own `id`. Null for providers that don't assign ids.
+	providerCallId: text('provider_call_id'),
+	// Set only when `name` is a built-in tool.
+	toolId: text('tool_id').references(() => tools.id),
 	args: text('args', { mode: 'json' })
 });
 
@@ -360,7 +371,7 @@ export const relations = defineRelations(schemaTables, (r) => ({
 			to: r.messages.id,
 			optional: false
 		}),
-		tool: r.one.tools({ from: r.messageToolCalls.toolId, to: r.tools.id, optional: false })
+		tool: r.one.tools({ from: r.messageToolCalls.toolId, to: r.tools.id })
 	},
 	memories: {
 		agent: r.one.agents({ from: r.memories.agentId, to: r.agents.id, optional: false })

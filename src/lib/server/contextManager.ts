@@ -11,6 +11,10 @@ import type { JsonValue } from '#lib/json.js';
 import { messageRegistry } from './messageRegistry';
 
 export type ToolCall = {
+	/** Our own id — the `message_tool_calls` primary key, referenced by its result's `toolCallId`. */
+	id: string;
+	/** The provider's own id for this call, if it assigned one (Anthropic's `toolu_...`). */
+	providerCallId?: string;
 	name: string;
 	args: Record<string, JsonValue>;
 };
@@ -20,7 +24,19 @@ export type Message = {
 	content: string;
 	toolCalls?: ToolCall[];
 	toolName?: string;
+	/** Set only on `role: 'tool'` messages — the ToolCall.id this message is the result of. */
+	toolCallId?: string;
 	model?: string;
+	/**
+	 * The provider's own representation of this exact assistant turn — see
+	 * ModelResponse.providerContent. Only ever set on the in-memory turn just produced by the
+	 * current run; not persisted. Tool-call ids are persisted separately (ToolCall.providerCallId),
+	 * so what this carries beyond the stored fields is Anthropic's thinking blocks — and those are
+	 * bound to the exact conversation prefix (system prompt, tools, earlier messages) that produced
+	 * them, which in this app often changes between runs (e.g. fetch_url's tool description lists
+	 * the conversation's URLs), so a stored copy would frequently be rejected on replay anyway.
+	 */
+	providerContent?: unknown;
 };
 
 const COMPACTION_INSTRUCTION = `Ignore your instructions above for this response only, and do not stay in character. Summarize the conversation above so it can continue with less history in context. Write a concise but complete summary that preserves: topics covered, preferences or decisions the user expressed, and any unresolved question or pending tasks. Respond in English, as a neutral summarizer. Write only the summary, with no preamble or commentary about the summarization itself.`;
@@ -46,6 +62,7 @@ export class ContextManager {
 				role: message.role,
 				content: message.content,
 				toolName: message.toolName,
+				toolCallId: message.toolCallId,
 				model: message.model
 			})
 			.returning();
@@ -56,13 +73,14 @@ export class ContextManager {
 					.select()
 					.from(toolsTable)
 					.where(eq(toolsTable.name, toolCall.name));
-				if (dbTool) {
-					await db.insert(messageToolCalls).values({
-						messageId: inserted.id,
-						toolId: dbTool.id,
-						args: toolCall.args
-					});
-				}
+				await db.insert(messageToolCalls).values({
+					id: toolCall.id,
+					messageId: inserted.id,
+					name: toolCall.name,
+					providerCallId: toolCall.providerCallId,
+					toolId: dbTool?.id,
+					args: toolCall.args
+				});
 			}
 		}
 
@@ -100,17 +118,20 @@ export class ContextManager {
 				? { sessionId: this.sessionId, createdAt: { gt: cutoffMessage.createdAt } }
 				: { sessionId: this.sessionId },
 			orderBy: { createdAt: 'asc' },
-			with: { messageToolCalls: { with: { tool: true } } }
+			with: { messageToolCalls: true }
 		});
 
 		this.history = dbMessages.map((msg) => ({
 			role: msg.role as Message['role'],
 			content: msg.content,
 			toolName: msg.toolName ?? undefined,
+			toolCallId: msg.toolCallId ?? undefined,
 			toolCalls:
 				msg.messageToolCalls.length > 0
 					? msg.messageToolCalls.map((tc) => ({
-							name: tc.tool.name,
+							id: tc.id,
+							providerCallId: tc.providerCallId ?? undefined,
+							name: tc.name,
 							args: tc.args as Record<string, JsonValue>
 						}))
 					: undefined

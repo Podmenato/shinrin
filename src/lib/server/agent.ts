@@ -1,6 +1,6 @@
 import type { ModelProvider } from './modelProviders/modelProvider';
 import { getModelProvider } from './modelProviders/providerRegistry';
-import { ContextManager, type Message } from './contextManager';
+import { ContextManager, type Message, type ToolCall } from './contextManager';
 import type { Tool } from './tools/tool';
 import { ToolError } from './tools/tool';
 import { logger } from './logger';
@@ -173,13 +173,18 @@ export class Agent {
 				throw e;
 			}
 
-			const hasToolCalls = response.toolCalls !== undefined && response.toolCalls.length > 0;
+			const toolCalls: ToolCall[] | undefined = response.toolCalls?.map((toolCall) => ({
+				id: crypto.randomUUID(),
+				...toolCall
+			}));
+			const hasToolCalls = toolCalls !== undefined && toolCalls.length > 0;
 			if (response.content || hasToolCalls) {
 				await this.ctx.add({
 					role: 'assistant',
 					content: response.content,
-					toolCalls: response.toolCalls,
-					model: response.model
+					toolCalls,
+					model: response.model,
+					providerContent: response.providerContent
 				});
 			} else {
 				await this.ctx.add({
@@ -188,18 +193,18 @@ export class Agent {
 				});
 				continue;
 			}
-			logger.debug({ content: response.content, toolCalls: response.toolCalls }, 'model response');
+			logger.debug({ content: response.content, toolCalls }, 'model response');
 
-			if (response.toolCalls !== undefined) {
-				for (const toolCall of response.toolCalls ?? []) {
+			if (toolCalls !== undefined) {
+				for (const toolCall of toolCalls) {
 					if (signal.aborted) {
 						break;
 					}
 
 					logger.info({ tool: toolCall.name, args: toolCall.args }, 'tool call');
 					const tool = this.tools.find((t) => t.definition.name === toolCall.name);
+					let result;
 					if (tool) {
-						let result = '';
 						try {
 							result = await tool.execute(toolCall.args, signal);
 							logger.debug({ tool: toolCall.name, result }, 'tool result');
@@ -211,17 +216,21 @@ export class Agent {
 								result = e instanceof ToolError ? e.message : JSON.stringify(e);
 								logger.error({ tool: toolCall.name, error: result }, 'tool error');
 							}
-						} finally {
-							const toolMessage: Message = {
-								role: 'tool',
-								content: result,
-								toolName: toolCall.name
-							};
-							await this.ctx.add(toolMessage);
 						}
 					} else {
+						// Still answered, so the call has a result like any other — the model sees why
+						// nothing happened instead of a call that silently went nowhere.
+						result = `Tool not found: ${toolCall.name}`;
 						logger.warn({ tool: toolCall.name }, 'tool not found');
 					}
+
+					const toolMessage: Message = {
+						role: 'tool',
+						content: result,
+						toolName: toolCall.name,
+						toolCallId: toolCall.id
+					};
+					await this.ctx.add(toolMessage);
 				}
 				if (signal.aborted) {
 					break;

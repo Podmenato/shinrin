@@ -16,6 +16,7 @@
 	} from '#lib/components/data-table/data-table.svelte';
 	import MessageSquareIcon from '@lucide/svelte/icons/message-square';
 	import { formatDateTime } from '#lib/date.js';
+	import { isHttpError } from '@sveltejs/kit';
 	import { toast } from 'svelte-sonner';
 	import DeleteSessionAction from './delete-session-action.svelte';
 
@@ -39,8 +40,8 @@
 		const selection = decodeModelSelection(selectionValue);
 
 		const session = await createSession({ agentId, name: trimmed.slice(0, 60), model: selection });
-		runAgent({ sessionId: session.id, prompt: trimmed }).catch(() => {
-			toast.error('Failed to send message');
+		runAgent({ sessionId: session.id, prompt: trimmed }).catch((e) => {
+			toast.error(isHttpError(e) ? e.body.message : 'Failed to send message');
 		});
 		await goto(resolve('/chat/[sessionId]', { sessionId: session.id }));
 	}

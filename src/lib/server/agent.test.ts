@@ -86,7 +86,13 @@ describe('Agent.run', () => {
 
 		const toolCallRows = await db.query.messageToolCalls.findMany({ with: { tool: true } });
 		expect(toolCallRows).toHaveLength(1);
-		expect(toolCallRows[0].tool.name).toBe('echo');
+		expect(toolCallRows[0].name).toBe('echo');
+		expect(toolCallRows[0].tool?.name).toBe('echo');
+
+		const resultRow = await db.query.messages.findFirst({
+			where: { sessionId: session.id, role: 'tool' }
+		});
+		expect(resultRow?.toolCallId).toBe(toolCallRows[0].id);
 	});
 
 	it('reports a ToolError message as the tool result instead of throwing', async () => {
@@ -108,7 +114,7 @@ describe('Agent.run', () => {
 		expect(toolMessage?.content).toBe('nope');
 	});
 
-	it('skips an unknown tool call without crashing', async () => {
+	it('answers an unknown tool call with a linked "not found" result instead of crashing', async () => {
 		const session = await seedSession();
 		const ctx = new ContextManager('system prompt', session.id);
 		const provider = new FakeModelProvider([
@@ -120,6 +126,18 @@ describe('Agent.run', () => {
 		const result = await agent.run('try', undefined, new AbortController().signal);
 
 		expect(result).toBe('moved on');
+
+		// Saved even though no `tools` row matches it.
+		const toolCallRows = await db.query.messageToolCalls.findMany();
+		expect(toolCallRows).toHaveLength(1);
+		expect(toolCallRows[0].name).toBe('does_not_exist');
+		expect(toolCallRows[0].toolId).toBeNull();
+
+		const resultRow = await db.query.messages.findFirst({
+			where: { sessionId: session.id, role: 'tool' }
+		});
+		expect(resultRow?.content).toBe('Tool not found: does_not_exist');
+		expect(resultRow?.toolCallId).toBe(toolCallRows[0].id);
 	});
 
 	it('retries when the model returns neither content nor tool calls', async () => {

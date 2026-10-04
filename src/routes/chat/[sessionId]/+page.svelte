@@ -21,6 +21,7 @@
 	import SquareIcon from '@lucide/svelte/icons/square';
 	import ChatMessage from './chat-message.svelte';
 	import AnkiSelectionMenu from './anki-selection-menu.svelte';
+	import { isHttpError } from '@sveltejs/kit';
 	import { toast } from 'svelte-sonner';
 
 	let { params }: { params: { sessionId: string } } = $props();
@@ -68,9 +69,9 @@
 		prompt = '';
 		try {
 			await runAgent({ sessionId, prompt: trimmed });
-		} catch {
+		} catch (e) {
 			prompt = trimmed;
-			toast.error('Failed to send message');
+			toast.error(isHttpError(e) ? e.body.message : 'Failed to send message');
 		} finally {
 			stopping = false;
 		}
