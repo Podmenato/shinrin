@@ -33,7 +33,7 @@
 
 	let prompt = $state('');
 	let stopping = $state(false);
-	let selectionValue = $state(
+	let selectionValue = $derived(
 		encodeModelSelection({
 			provider: session.model.provider.name as ModelSelection['provider'],
 			name: session.model.name

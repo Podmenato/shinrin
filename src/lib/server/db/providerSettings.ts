@@ -16,7 +16,7 @@ export async function getProviderConfig<T>(
 	if (!provider) {
 		throw new Error(`Unknown provider: ${providerName}`);
 	}
-	if (provider.config == null) {
+	if (provider.config === null) {
 		return defaults;
 	}
 	return v.parse(schema, provider.config);
