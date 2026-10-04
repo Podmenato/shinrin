@@ -172,6 +172,29 @@ describe('Agent.run', () => {
 		expect(resultRow?.toolCallId).toBe(toolCallRow?.id);
 	});
 
+	it('does not run a tool call whose arguments were invalid, answering it with a linked error', async () => {
+		const session = await seedSession();
+		const ctx = new ContextManager('system prompt', session.id);
+		let ran = false;
+		const echo = fakeTool('echo', async () => {
+			ran = true;
+			return 'ok';
+		});
+		const provider = new FakeModelProvider([
+			{ content: '', toolCalls: [{ name: 'echo', args: {}, invalidArguments: true }] },
+			{ content: 'retried' }
+		]);
+		const agent = new Agent(session.agentId, provider, 'test-model', ctx, [echo]);
+
+		const result = await agent.run('try', undefined, new AbortController().signal);
+
+		expect(result).toBe('retried');
+		expect(ran).toBe(false);
+		const toolMessage = provider.calls[1].messages.find((m) => m.role === 'tool');
+		expect(toolMessage?.content).toContain('not valid JSON');
+		expect(toolMessage?.toolCallId).toBeDefined();
+	});
+
 	it('reports a plain Error message as the tool result, not "{}"', async () => {
 		const session = await seedSession();
 		const ctx = new ContextManager('system prompt', session.id);

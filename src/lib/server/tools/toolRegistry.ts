@@ -62,6 +62,10 @@ export function getTools(names: string[], ctx: ToolContext): Tool[] {
 		.filter((tool) => tool !== null);
 }
 
+// Providers cap tool names (Mistral: `^[a-zA-Z0-9_-]{1,64}$`), so a long agent name would break
+// every request that offers this subagent.
+const MAX_TOOL_NAME_LENGTH = 64;
+
 function subagentToolName(agentName: string): string {
 	return (
 		'subagent_' +
@@ -70,7 +74,7 @@ function subagentToolName(agentName: string): string {
 			.toLowerCase()
 			.replace(/[^a-z0-9]+/g, '_')
 			.replace(/^_+|_+$/g, '')
-	);
+	).slice(0, MAX_TOOL_NAME_LENGTH);
 }
 
 /**

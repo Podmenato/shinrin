@@ -5,7 +5,8 @@ import { db } from '#lib/server/db/index.js';
 import { sessions } from '#lib/server/db/schema.js';
 import { Agent } from '#lib/server/agent.js';
 import { modelSelectionSchema } from '#lib/server/modelProviders/providerRegistry.js';
-import { AnthropicProviderError } from '#lib/server/modelProviders/anthropicProvider.js';
+import { ModelProviderError } from '#lib/server/modelProviders/modelProvider.js';
+import { logger } from '#lib/server/logger.js';
 import { getOrCreateModel } from '#lib/server/db/getOrCreateModel.js';
 import { sessionRegistry } from '#lib/server/sessionRegistry.js';
 import { messageRegistry } from '#lib/server/messageRegistry.js';
@@ -87,23 +88,28 @@ export const runAgent = command(runSchema, async ({ sessionId, prompt }) => {
 		error(404, 'Session not found');
 	}
 
-	const agent = await Agent.createFromSession(sessionId, prompt);
-	const controller = new AbortController();
-
-	sessionRegistry.start(sessionId, controller);
 	try {
-		return await agent.run(
-			prompt,
-			(delta) => sessionRegistry.append(sessionId, delta),
-			controller.signal
-		);
+		const agent = await Agent.createFromSession(sessionId, prompt);
+		const controller = new AbortController();
+
+		sessionRegistry.start(sessionId, controller);
+		try {
+			return await agent.run(
+				prompt,
+				(delta) => sessionRegistry.append(sessionId, delta),
+				controller.signal
+			);
+		} finally {
+			sessionRegistry.end(sessionId);
+		}
 	} catch (e) {
-		if (e instanceof AnthropicProviderError) {
+		// Logged here, on the server, because the client only ever receives the message — and
+		// SvelteKit doesn't log an expected `error(...)`, whose response is still an HTTP 200.
+		logger.error({ err: e, sessionId }, 'agent run failed');
+		if (e instanceof ModelProviderError) {
 			error(500, e.message);
 		}
 		throw e;
-	} finally {
-		sessionRegistry.end(sessionId);
 	}
 });
 

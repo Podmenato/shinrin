@@ -45,3 +45,8 @@ export function ankiConnectUrl(): string {
 export function anthropicApiKey(): string | undefined {
 	return process.env.ANTHROPIC_API_KEY;
 }
+
+// Same rules as anthropicApiKey() above.
+export function mistralApiKey(): string | undefined {
+	return process.env.MISTRAL_API_KEY;
+}

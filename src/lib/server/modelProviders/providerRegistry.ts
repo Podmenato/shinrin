@@ -2,12 +2,13 @@ import * as v from 'valibot';
 import type { ModelProvider } from './modelProvider';
 import { OllamaProvider } from './ollamaProvider';
 import { AnthropicProvider } from './anthropicProvider';
+import { MistralProvider } from './mistralProvider';
 import { logger } from '../logger';
 
 /** Every registered provider name — the one hand-written source of truth. Everything else
  * (the type, the registry's required shape, valibot validation) is derived from or checked
  * against this array, not the other way around. */
-export const PROVIDER_NAMES = ['ollama', 'anthropic'] as const;
+export const PROVIDER_NAMES = ['ollama', 'anthropic', 'mistral'] as const;
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 
 // One instance per provider, not per model — a provider client is provider-level state (host,
@@ -21,7 +22,8 @@ export type ProviderName = (typeof PROVIDER_NAMES)[number];
 // calls inside anthropicProvider.ts), exactly like OllamaProvider already reads its num_ctx setting.
 const registry: Record<ProviderName, ModelProvider> = {
 	ollama: new OllamaProvider(),
-	anthropic: new AnthropicProvider()
+	anthropic: new AnthropicProvider(),
+	mistral: new MistralProvider()
 };
 
 /** Valibot schema for a `ModelSelection` — the one shape used at every command/form boundary

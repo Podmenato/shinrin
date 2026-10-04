@@ -17,6 +17,8 @@ export type ToolCall = {
 	providerCallId?: string;
 	name: string;
 	args: Record<string, JsonValue>;
+	/** See ModelToolCall.invalidArguments. Only on the in-memory turn just produced — not persisted. */
+	invalidArguments?: true;
 };
 
 export type Message = {

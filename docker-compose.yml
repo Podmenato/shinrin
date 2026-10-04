@@ -9,6 +9,7 @@ services:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - ANKI_CONNECT_URL=http://host.docker.internal:8765
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
     volumes:
       - shinrin-data:/app/.data
     # Lets the container resolve host.docker.internal on Linux hosts (Docker

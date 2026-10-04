@@ -15,6 +15,9 @@ const CANCELLED_MESSAGE = 'Cancelled by user.';
 const TRUNCATED_TOOL_CALL_MESSAGE =
 	'Not run: the reply hit the output token limit before this tool call was complete, so its ' +
 	'arguments may be cut off.';
+const INVALID_ARGUMENTS_MESSAGE =
+	'Not run: the arguments for this tool call were not valid JSON. Call the tool again with valid ' +
+	'JSON arguments.';
 
 export class Agent {
 	private provider: ModelProvider;
@@ -192,6 +195,10 @@ export class Agent {
 					providerContent: response.providerContent
 				});
 			} else {
+				logger.warn(
+					{ iteration: iterations, model: this.model },
+					'model returned neither content nor tool calls — retrying'
+				);
 				await this.ctx.add({
 					role: 'system',
 					content: 'Provided no response, and called no tools. Retry.'
@@ -212,6 +219,9 @@ export class Agent {
 					if (response.truncated) {
 						result = TRUNCATED_TOOL_CALL_MESSAGE;
 						logger.warn({ tool: toolCall.name }, 'tool call truncated by output token limit');
+					} else if (toolCall.invalidArguments) {
+						result = INVALID_ARGUMENTS_MESSAGE;
+						logger.warn({ tool: toolCall.name }, 'tool call arguments were not valid JSON');
 					} else if (tool) {
 						try {
 							result = await tool.execute(toolCall.args, signal);

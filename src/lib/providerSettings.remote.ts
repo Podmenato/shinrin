@@ -8,6 +8,10 @@ import {
 	anthropicSettingsSchema,
 	DEFAULT_ANTHROPIC_SETTINGS
 } from '#lib/server/modelProviders/anthropicProvider.js';
+import {
+	mistralSettingsSchema,
+	DEFAULT_MISTRAL_SETTINGS
+} from '#lib/server/modelProviders/mistralProvider.js';
 
 export const getOllamaSettings = query(async () => {
 	return getProviderConfig('ollama', ollamaSettingsSchema, DEFAULT_OLLAMA_SETTINGS);
@@ -25,4 +29,13 @@ export const getAnthropicSettings = query(async () => {
 export const saveAnthropicSettings = form(anthropicSettingsSchema, async (settings) => {
 	await saveProviderConfig('anthropic', settings);
 	await getAnthropicSettings().refresh();
+});
+
+export const getMistralSettings = query(async () => {
+	return getProviderConfig('mistral', mistralSettingsSchema, DEFAULT_MISTRAL_SETTINGS);
+});
+
+export const saveMistralSettings = form(mistralSettingsSchema, async (settings) => {
+	await saveProviderConfig('mistral', settings);
+	await getMistralSettings().refresh();
 });

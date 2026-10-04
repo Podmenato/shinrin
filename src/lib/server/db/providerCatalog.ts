@@ -4,4 +4,8 @@
 // When adding a provider here, also add a new migration for it (`pnpm exec drizzle-kit generate
 // --custom --config drizzle.config.prod.ts`, then hand-write the INSERT) — this array alone never
 // reaches production. Mirrors toolCatalog.ts's TOOL_CATALOG exactly.
-export const PROVIDER_CATALOG: { name: string }[] = [{ name: 'ollama' }, { name: 'anthropic' }];
+export const PROVIDER_CATALOG: { name: string }[] = [
+	{ name: 'ollama' },
+	{ name: 'anthropic' },
+	{ name: 'mistral' }
+];

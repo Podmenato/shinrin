@@ -1,6 +1,6 @@
 import Anthropic, { APIError, AuthenticationError, RateLimitError } from '@anthropic-ai/sdk';
 import * as v from 'valibot';
-import type { ModelProvider, ModelResponse } from './modelProvider';
+import { ModelProviderError, type ModelProvider, type ModelResponse } from './modelProvider';
 import type { Message, ToolCall } from '../contextManager';
 import type { Tool } from '../tools/tool';
 import type { JsonValue } from '#lib/json.js';
@@ -16,28 +16,23 @@ export const anthropicSettingsSchema = v.object({
 export type AnthropicSettings = v.InferOutput<typeof anthropicSettingsSchema>;
 export const DEFAULT_ANTHROPIC_SETTINGS: AnthropicSettings = { maxTokens: 16000 };
 
-/** User-facing errors from a failed Anthropic request — mirrors tool.ts's ToolError. */
-export class AnthropicProviderError extends Error {
-	constructor(msg: string) {
-		super(msg);
-		Object.setPrototypeOf(this, AnthropicProviderError.prototype);
-	}
-}
-
-function toProviderError(err: unknown): AnthropicProviderError {
+function toProviderError(err: unknown): ModelProviderError {
 	// Most specific first: AuthenticationError/RateLimitError are themselves APIErrors.
 	if (err instanceof AuthenticationError) {
-		return new AnthropicProviderError(
-			'Anthropic rejected the API key. Check the ANTHROPIC_API_KEY environment variable.'
+		return new ModelProviderError(
+			'Anthropic rejected the API key. Check the ANTHROPIC_API_KEY environment variable.',
+			{ cause: err }
 		);
 	}
 	if (err instanceof RateLimitError) {
-		return new AnthropicProviderError('Anthropic rate limit reached — try again shortly.');
+		return new ModelProviderError('Anthropic rate limit reached — try again shortly.', {
+			cause: err
+		});
 	}
 	if (err instanceof APIError) {
-		return new AnthropicProviderError(`Anthropic API error: ${err.message}`);
+		return new ModelProviderError(`Anthropic API error: ${err.message}`, { cause: err });
 	}
-	return new AnthropicProviderError(err instanceof Error ? err.message : String(err));
+	return new ModelProviderError(err instanceof Error ? err.message : String(err), { cause: err });
 }
 
 // The registry instantiates providers eagerly at module scope (see providerRegistry.ts), so the
@@ -265,7 +260,7 @@ export class AnthropicProvider implements ModelProvider {
 	): AsyncGenerator<string, ModelResponse, void> {
 		const client = getClient();
 		if (!client) {
-			throw new AnthropicProviderError(
+			throw new ModelProviderError(
 				'Anthropic is not configured. Set the ANTHROPIC_API_KEY environment variable.'
 			);
 		}
