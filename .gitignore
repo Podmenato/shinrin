@@ -19,8 +19,7 @@ Thumbs.db
 # Env
 .env
 .env.*
-!.env.development.example
-!.env.production.example
+!.env.example
 
 # SQLite data files
 /.data

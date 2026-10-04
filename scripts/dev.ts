@@ -6,7 +6,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { loadEnv } from '#lib/server/env.js';
 
-loadEnv('development');
+loadEnv();
 
 function run(command: string, args: string[]): void {
 	const result = spawnSync(command, args, { stdio: 'inherit', env: process.env });
@@ -16,7 +16,7 @@ function run(command: string, args: string[]): void {
 	}
 }
 
-// Set in .env.development. When true, every `pnpm dev` starts from an empty,
+// Set in .env. When true, every `pnpm dev` starts from an empty,
 // freshly-seeded schema. Flip to false locally if you want data to survive
 // across restarts — seed.ts only runs right after a wipe: most of its
 // inserts have no conflict handling, so re-running it against data that's

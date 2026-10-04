@@ -6,7 +6,7 @@ import { relations } from './schema';
 
 // No SvelteKit/Vite dependency here on purpose — this is called with an arbitrary path (a real
 // file from db/index.ts — a per-test-file temp file when VITEST is set, see testDbPath — or a
-// path built by hand from seed.ts/clean.ts/scripts/mcp-server.ts, none of which run through Vite)
+// path built by hand from seed.ts/clean.ts, neither of which runs through Vite)
 // so it stays plain Node.
 export function createDb(path: string) {
 	mkdirSync(dirname(path), { recursive: true });

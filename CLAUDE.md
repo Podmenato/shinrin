@@ -10,8 +10,6 @@ Compose app (see "Docker" below) — the intended audience is existing Anki
 users willing to run `docker compose up`, not necessarily comfortable
 building from source; running it depends on having Ollama and Anki (with
 the AnkiConnect add-on) already set up locally on the same machine.
-Bare-metal (`pnpm start`) is not a supported way to run this anymore — see
-"Docker" below for why, and "Dev commands" for what's left of it.
 
 ## Stack
 
@@ -144,6 +142,9 @@ that originally motivated `jsonb`, just a different storage encoding.
   `toolId` is a nullable FK set only when the name is a built-in tool — so
   subagent calls (`subagent_<agent name>`, not in `tools`) and calls to a
   name the model made up are saved too (both were silently dropped before).
+  `position` is the call's index within its turn (0, 1, 2…), so a rebuilt
+  turn lists its calls in the order the model made them — via the
+  documented `orderBy: { position: 'asc' }`, not storage order.
   Ids follow the usual external-id pattern: `id` is always our own uuid,
   assigned by `Agent.run()`; `providerCallId` holds the provider's own id
   when it assigns one (Anthropic's `toolu_...`, null for Ollama), and
@@ -636,35 +637,41 @@ utf-8` for `text/*` mimetypes — without it, CJK resource text renders as
 ## MCP server
 
 A second, independent tool-calling surface alongside the internal Ollama
-loop above — an MCP (Model Context Protocol) stdio server that lets
-_external_ clients (Claude Code, Claude Desktop) call into shinrin's own
-tools, rather than shinrin calling out to a model. Entrypoint:
-[scripts/mcp-server.ts](scripts/mcp-server.ts) (`pnpm mcp` / `pnpm mcp-dev`); tool
-registration: [saveStoryMcpTool.ts](src/lib/server/mcp/tools/saveStoryMcpTool.ts).
-Only one tool exists so far, `save_story` — first use case was logging a
+loop above — an MCP (Model Context Protocol) endpoint that lets _external_
+clients (Claude Code, Claude Desktop) call into shinrin's own tools, rather
+than shinrin calling out to a model. Served over HTTP by the running app
+itself at `/mcp` ([src/routes/mcp/+server.ts](src/routes/mcp/+server.ts));
+tool registration:
+[saveStoryMcpTool.ts](src/lib/server/mcp/tools/saveStoryMcpTool.ts). Only
+one tool exists so far, `save_story` — first use case was logging a
 work/coding session as material for later roleplay practice (see "Stories"
 above), but the tool itself is deliberately generic (any external tool can
 hand off reusable content this way), not work-session-specific — it was
 originally named `log_work_session` and renamed once that became clear.
 
-- **stdio, not HTTP — deliberate, not a placeholder.** An MCP server can be
-  a subprocess a client spawns and owns the pipes of (stdio), or a route a
-  running server answers over HTTP. HTTP was seriously considered — it
-  reuses the already-running app process/db connection, needs no per-client
-  command/cwd registration, and normal stdout logging just works — but was
-  rejected because it ties tool availability to shinrin's own web server
-  being open, which defeats a real use case (logging a work session without
-  wanting the study app open at the same time). The cost accepted instead:
-  registration is per-client and slightly fiddly (see below), and there's
-  no auth on the connection — acceptable since stdio's isolation is
-  structural (the client owns the process; nothing else can reach it) and
-  this is a personal, local, single-user tool. Because tool registration
-  (`registerSaveStoryMcpTool(server, db)`) only touches a plain `McpServer`
-  instance and knows nothing about the transport, switching to HTTP later
-  (mounting `createMcpHandler`'s `fetch(request)` as a SvelteKit
-  `+server.ts` route — already a web-standard `Request`→`Response`
-  function, no framework adapter package needed) would only mean rewriting
-  `scripts/mcp-server.ts`'s transport wiring, not the tool logic.
+- **HTTP, served by the app (changed 2026-10-04 from a stdio subprocess).**
+  It used to be a separate stdio process (`scripts/mcp-server.ts`, spawned
+  per client session) so tools worked without the study app running. Once
+  shinrin ran permanently in Docker that reason was gone, and the stdio
+  process had quietly become wrong: it opened `.data/prod.sqlite3` on the
+  host, while the real prod db lives in the Docker volume, so anything it
+  wrote would never have reached the app. Now `createMcpHandler(factory)`
+  (the SDK's web-standard `Request`→`Response` entry) is mounted directly as
+  a SvelteKit `+server.ts` route — no adapter package — and uses the app's
+  own `db`. `pnpm dev` serves the same endpoint against the dev db
+  (`http://localhost:5173/mcp`).
+- **One fresh `McpServer` per HTTP request.** That's how `createMcpHandler`
+  works (stateless per-request serving, plus its default stateless fallback
+  for 2025-era clients). It's also what keeps the `subject` enum current —
+  see below.
+- **Localhost-only Host/Origin validation in front of the handler** —
+  `hostHeaderValidationResponse(…, localhostAllowedHostnames())` +
+  `originValidationResponse(…, localhostAllowedOrigins())`, the SDK's
+  documented DNS-rebinding protection (the handler itself is deliberately
+  validation-free). A missing `Origin` passes — non-browser clients don't
+  send one. This stops a web page from reaching the endpoint through a
+  browser; it doesn't stop a LAN device that sets the headers itself — the
+  same no-auth exposure as the rest of the app.
 - **Package: `@modelcontextprotocol/server`, not `@modelcontextprotocol/sdk`.**
   The SDK recently split from one monolithic package into
   `@modelcontextprotocol/server` + `@modelcontextprotocol/client` — the
@@ -677,15 +684,13 @@ originally named `log_work_session` and renamed once that became clear.
   `@valibot/to-json-schema`'s `toStandardJsonSchema()` bridges the gap, no
   migration off valibot needed anywhere else in the app.
 - **The `subject` parameter is a dynamically-built enum, not a raw UUID
-  field.** `registerSaveStoryMcpTool` queries `subjects` once at server
-  startup and builds `v.picklist(subjectNames)`, resolving the chosen name
-  back to a `subjectId` inside the handler — an external MCP client has no
-  notion of shinrin's internal ids, and JSON Schema enums can't be
-  recomputed per-call in this SDK's high-level `registerTool` API, only at
-  registration time. Because this process is short-lived (a stdio server is
-  spawned fresh per client session/reconnect, not long-running like the web
-  app), a subject added mid-session simply not yet appearing is an accepted
-  v1 gap, not a bug to fix — the next spawn picks it up.
+  field.** `registerSaveStoryMcpTool` queries `subjects` and builds
+  `v.picklist(subjectNames)`, resolving the chosen name back to a
+  `subjectId` inside the handler — an external MCP client has no notion of
+  shinrin's internal ids. JSON Schema enums can't be recomputed per-call in
+  this SDK's high-level `registerTool` API, only at registration time — but
+  registration now happens per HTTP request (see above), so a newly added
+  subject shows up on the client's next request.
 - **A separate implementation from the internal `save_story` Tool
   ([saveStoryTool.ts](src/lib/server/tools/saveStoryTool.ts)), deliberately
   not shared or merged.** The internal tool's `subjectId` comes from
@@ -694,65 +699,22 @@ originally named `log_work_session` and renamed once that became clear.
   parameter shapes and typing conventions (valibot args here vs. this app's
   `JsonObjectSchema`/`JsonValue` convention there) that reusing/extending
   the internal tool wasn't a clean fit. Both tools happen to be named
-  `save_story` — harmless, since they're different processes registered in
-  entirely separate registries (Ollama's tool list vs. this MCP server's),
+  `save_story` — harmless, since they're registered in entirely separate
+  registries (Ollama's tool list vs. this MCP server's),
   but worth knowing if grepping for the name turns up two hits. `content`
   is always required here (unlike the internal tool's
   create-with-no-content-yet case), matching `story_content.content` being
   `NOT NULL` — this tool exists to hand off real content, not to create an
   empty placeholder story.
-- **stdout is the JSON-RPC wire for a stdio server — nothing else may
-  write to it, confirmed the hard way twice.** First, `pino`'s own default
-  destination is stdout (see [logger.ts](src/lib/server/logger.ts)), so
-  `mcp-server.ts` builds its own instance pointed at stderr
-  (`pino.destination(2)`) instead of importing the shared `logger` export.
-  Second, and less obvious: `dotenv`'s own `config()` call (inside
-  [loadEnv()](src/lib/server/env.ts)) prints an "injected env" tip to
-  **stdout** by default — this would have corrupted the protocol stream
-  from a dependency neither logging setup accounted for. Only found by
-  actually driving the server over raw stdio JSON-RPC (spawn it, send
-  `initialize`/`tools/list`/`tools/call`, assert every stdout line parses
-  as JSON) rather than trusting the design — fixed with `quiet: true` in
-  `loadEnv()`, which also silences this same noise for
-  `dev.ts`/`seed.ts`/`clean.ts` with no downside there.
-- **Registration is per-MCP-client, not automatic, and desktop-app
-  registration needed the raw config file, not the Connectors UI.** Claude
-  Code: `claude mcp add shinrin -- pnpm --dir <path> mcp`. Claude Desktop's
-  "Add custom connector" dialog turned out to be remote-URL-only (HTTPS +
-  optional OAuth fields, no command/args) — local stdio servers there need
-  a hand-edited `mcpServers` entry in `claude_desktop_config.json` instead,
-  same `command`/`args` shape as the CLI. Either way the command must be
-  cwd-independent (`pnpm --dir <absolute-path> mcp`, not bare `pnpm mcp`)
-  since a registered connector has no inherent project directory to run
-  from. Restarting the app (or reconnecting the client) is required to pick
-  up config changes — an already-open session does not retroactively gain a
-  newly registered or renamed tool.
-- **`mcp-server.ts` itself defaults to dev mode** — it calls
-  `loadEnv(currentMode())` ([env.ts](src/lib/server/env.ts)), and with no
-  `NODE_ENV` set that's `'development'`. `pnpm mcp` / `pnpm mcp-dev`
-  (package.json) exist specifically to make that an explicit choice rather
-  than an easy-to-miss client-config setting: `mcp` hardcodes
-  `NODE_ENV=production` and is the one to register for real/durable use;
-  `mcp-dev` hardcodes `development` for testing against throwaway data.
-  Registering the raw script without going through either (or a client
-  config that doesn't set `NODE_ENV`) silently lands on dev — worth knowing
-  because of a real trap this caused once: because a stdio MCP client
-  (Claude Desktop, at least) spawns the server once and keeps the same
-  process alive across an entire session rather than respawning per call, a
-  `DB_WIPE_ON_START` wipe that happens _while_ that process is already
-  running leaves it holding an open file handle to the now-deleted,
-  unlinked inode — Unix doesn't actually remove a file while a process
-  still has it open, it just unlinks the directory entry. Every subsequent
-  write from that process lands in this orphaned, invisible copy of the
-  database — visible to nothing else, not the running web app, not a fresh
-  `sqlite3`/`better-sqlite3` connection, forever, until that specific
-  process exits. Confirmed by comparing `lsof`'s reported inode for the
-  running `mcp-server.ts` process against `ls -i` on the current on-disk
-  file — they didn't match. The fix in the moment was restarting the MCP
-  client so it opens a fresh handle; the actual lesson is that any
-  long-lived connection sharing the dev DB across a `DB_WIPE_ON_START`
-  restart is fundamentally fragile — which is why `mcp` (production) is now
-  the one meant to be registered by default.
+- **Registration is per-MCP-client.** Claude Code:
+  `claude mcp add --transport http shinrin http://localhost:4287/mcp`.
+  Claude Desktop's "Add custom connector" dialog is remote-URL-only (HTTPS +
+  optional OAuth fields), so a plain-http localhost endpoint goes through a
+  stdio-to-HTTP bridge in `claude_desktop_config.json` instead (e.g.
+  `npx -y mcp-remote http://localhost:4287/mcp`, see README). Restarting the
+  app (or reconnecting the client) is required to pick up config changes —
+  an already-open session does not retroactively gain a newly registered or
+  renamed tool.
 - **No lookup tool for an existing story's id** — same deliberate gap as
   `update_topic`/`update_mistake` (see "Subjects" above). `create`'s
   response text includes the new story's id specifically so a
@@ -1202,9 +1164,8 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
 
 ## Docker
 
-Landed 2026-09-12. `docker compose up --build` is the only supported way to
-run this in production — bare-metal `pnpm start` is not maintained as a
-fallback (see "Dev commands" below for what's left of it and why).
+Landed 2026-09-12. `docker compose up --build` is the only way to run this
+in production.
 Self-hosted, single-writer, LAN-first — same pattern as Open WebUI/
 Jellyfin/Plex: one container runs shinrin, Ollama and AnkiConnect stay
 running natively on the host (not containerized), reached via
@@ -1350,12 +1311,6 @@ foreign_keys=OFF` inside a transaction — so the `PRAGMA foreign_keys=OFF`
   this once: a manual `docker run -v shinrin-data:...` for inspection
   silently created a _different_, unrelated empty volume instead of
   touching the real one. Always check `docker volume ls` for the real name.
-- **Migrating existing bare-metal data into Docker** is a manual, one-time
-  operation, not automated — stop the container, then a throwaway `alpine`
-  container bind-mounting both the real named volume and the host `.data/`
-  dir, `cp` the sqlite file across. Not an ongoing sync; bare-metal and the
-  Docker volume are independent copies from that point on, which is fine
-  since bare-metal isn't a supported path going forward.
 
 ## Dev commands (use pnpm)
 
@@ -1365,7 +1320,7 @@ running with the [AnkiConnect](https://ankiweb.net/shared/info/2055492159)
 add-on installed. Then `pnpm install`.
 
 - `pnpm dev` / `pnpm dev-debug` / `pnpm dev-trace` — runs [scripts/dev.ts](scripts/dev.ts).
-  If `DB_WIPE_ON_START=true` (set in `.env.development`, default on) it first
+  If `DB_WIPE_ON_START=true` (set in `.env`, default on) it first
   deletes the sqlite db file. Either way it then always runs
   `drizzle-kit push --force` (schema sync straight from
   [schema.ts](src/lib/server/db/schema.ts), no migration files — dev never
@@ -1389,14 +1344,6 @@ drizzle.config.prod.ts`, i.e. diff [schema.ts](src/lib/server/db/schema.ts)
   safe to run any time regardless of whether a persistent db even exists
   yet. `drizzle/` is committed (not gitignored) — it's the versioned
   migration lineage for the one persistent db, not per-machine state.
-- **`pnpm start` is legacy — not the supported way to run this anymore**
-  (see "Docker" above). Still physically present ([scripts/start.ts](scripts/start.ts)):
-  compares `package.json`'s version against `.data/VERSION` and, on a
-  mismatch, reinstalls/migrates/rebuilds before launching — a bare-metal
-  "git pull, rerun, it upgrades itself" workflow that doesn't map onto
-  Docker (a version bump there means a new image, not an in-place upgrade).
-  Kept around unmaintained rather than deleted outright; don't extend it or
-  point anyone at it.
 - **`scripts/server.js`** (renamed from `.ts` 2026-09-12 — see "Docker"
   above for why) — the real production server, replacing adapter-node's own
   generated entrypoint. Exists because of a genuine bug in this pinned
@@ -1430,12 +1377,7 @@ drizzle.config.prod.ts`, i.e. diff [schema.ts](src/lib/server/db/schema.ts)
   it. Always binds `0.0.0.0` — no host var, matching this app having no auth
   layer to gate LAN exposure behind, so that's a deliberate trade-off, not
   an oversight. In production this runs chained after `scripts/migrate.js`
-  in the Docker image's `CMD`, not launched by `scripts/start.ts` anymore.
-- `pnpm mcp` / `pnpm mcp-dev` — runs [scripts/mcp-server.ts](scripts/mcp-server.ts),
-  the MCP stdio server (see "MCP server" above), with `NODE_ENV` set to
-  `production`/`development` respectively. Not something you run directly
-  day to day — an MCP client (Claude Code, Claude Desktop) spawns one of
-  these commands itself once registered, per whichever it's configured with.
+  in the Docker image's `CMD`.
 - `pnpm check`, `pnpm lint`, `pnpm format`, `pnpm test` (vitest). No e2e
   suite — Playwright was removed (2026-08-29), unused: `playwright.config.ts`
   had no matching `*.e2e.ts` files anywhere in the repo. Add it back
@@ -1443,31 +1385,26 @@ drizzle.config.prod.ts`, i.e. diff [schema.ts](src/lib/server/db/schema.ts)
 
 ## Environment
 
-- The db path itself is **not** env-configurable — [env.ts](src/lib/server/env.ts)'s
-  `dbPath(mode)` returns a literal `.data/dev.sqlite3` / `.data/prod.sqlite3`
-  (both gitignored) per mode, so dev and prod db files can coexist on the
-  same machine without any setup. This used to be a `DATABASE_URL` env var
-  back when the db was Postgres and the connection string was the
-  configurable part — dropped as dead weight once it was just a fixed local
-  path either way, not restored since.
-- `.data/VERSION` (gitignored, written by [scripts/start.ts](scripts/start.ts))
-  is part of the legacy bare-metal path (see "Docker" and "Dev commands"
-  above) — irrelevant to the Docker flow, which has no equivalent (a
-  version bump there is a new image, not an in-place upgrade check).
-  Documented here only because the file/mechanism still exists, not because
-  it's in active use.
-- `.env.development` (gitignored; `.env.development.example` is the
-  committed template) carries exactly one var, `DB_WIPE_ON_START` — see
-  "Dev commands" above, still current (dev workflow is unaffected by the
-  Docker move). `.env.production`/`.env.production.example` are legacy,
-  same bare-metal caveat as `.data/VERSION` above — in the Docker flow,
-  `SHINRIN_PORT` (the port [scripts/server.js](scripts/server.js) listens
-  on, default `4287`) is set directly in `docker-compose.yml`'s
-  `environment:` block instead, alongside `OLLAMA_BASE_URL`/
-  `ANKI_CONNECT_URL` (see "Docker" above) — none of these three go through
-  a `.env.[mode]` file for the Docker path.
-- [env.ts](src/lib/server/env.ts)'s `loadEnv(mode)` loads the right
-  `.env.[mode]` file for anything that runs outside Vite (drizzle configs,
-  `scripts/dev.ts`). SvelteKit's own dev/build/preview don't need it — Vite
-  already loads `.env.[mode]` for the app's own env vars (see "SvelteKit 3"
-  section above for how those are declared/imported now).
+- **One `.env` file (gitignored) plus a committed `.env.example`**
+  (consolidated 2026-10-04 from per-mode env files). Every value that
+  actually differs between environments (port, Ollama/Anki URLs) lives in
+  `docker-compose.yml`. `.env` is read by two things:
+  `docker compose`, which uses a file named exactly `.env` to fill `${...}`
+  in `docker-compose.yml` (that's how `ANTHROPIC_API_KEY` reaches the
+  container), and `scripts/dev.ts` via [loadEnv()](src/lib/server/env.ts)
+  (the `vite dev` it spawns inherits the result). The container itself only
+  sees the variables `docker-compose.yml`'s `environment:` block passes it —
+  so the dev-only `DB_WIPE_ON_START` living in the same file never reaches
+  production.
+- Config is read from `process.env` through small helpers in
+  [env.ts](src/lib/server/env.ts) (`shinrinPort()`, `ollamaBaseUrl()`,
+  `ankiConnectUrl()`, `anthropicApiKey()`), each with a localhost default
+  for dev. `src/env.ts`'s `defineEnvVars({})` (SvelteKit 3's own declared
+  env vars, see "SvelteKit 3" above) is currently empty.
+- The db path itself is **not** env-configurable — `dbPath(mode)` returns a
+  literal `.data/dev.sqlite3` / `.data/prod.sqlite3` (both gitignored) per
+  mode, picked by `NODE_ENV` (`currentMode()`) — independent of which env
+  file exists. In Docker, `.data/` is the named volume. This used to be a
+  `DATABASE_URL` env var back when the db was Postgres and the connection
+  string was the configurable part — dropped as dead weight once it was
+  just a fixed local path either way, not restored since.

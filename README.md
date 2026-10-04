@@ -37,6 +37,14 @@ Only needed for development (see below), not for just running it:
 
 ## Running it
 
+To use Anthropic (Claude) models alongside Ollama, put your API key in a `.env`
+file next to [docker-compose.yml](docker-compose.yml) first — without one,
+Anthropic simply contributes no models:
+
+```sh
+cp .env.example .env   # then set ANTHROPIC_API_KEY
+```
+
 ```sh
 docker compose up --build
 ```
@@ -57,12 +65,37 @@ knowing before running it on a network you don't trust. Change
 `SHINRIN_PORT` in [docker-compose.yml](docker-compose.yml) to use a
 different port.
 
-## Developing
+## Connecting an MCP client
 
-First setup the `.env.development` file
+The running app serves an MCP endpoint at `http://localhost:4287/mcp`
+(accepted from this machine only). Register it once per client — Claude Code:
 
 ```sh
-cp .env.development.example .env.development
+claude mcp add --transport http shinrin http://localhost:4287/mcp
+```
+
+Clients that can only launch local (stdio) servers can reach it through a
+stdio-to-HTTP bridge such as
+[mcp-remote](https://www.npmjs.com/package/mcp-remote) — e.g. in Claude
+Desktop's `claude_desktop_config.json`:
+
+```json
+{
+	"mcpServers": {
+		"shinrin": { "command": "npx", "args": ["-y", "mcp-remote", "http://localhost:4287/mcp"] }
+	}
+}
+```
+
+`pnpm dev` serves the same endpoint against the dev database, at
+`http://localhost:5173/mcp`.
+
+## Developing
+
+First set up the `.env` file (shared with Docker, see above)
+
+```sh
+cp .env.example .env
 ```
 
 Then run with
@@ -76,7 +109,7 @@ logging.
 
 Every start syncs the database schema to match
 [schema.ts](src/lib/server/db/schema.ts). If `DB_WIPE_ON_START=true` in
-`.env.development` (the default), it also wipes the database and reseeds it
+`.env` (the default), it also wipes the database and reseeds it
 with example data first, so every session starts from a known state. Set
 `DB_WIPE_ON_START=false` to keep your data across restarts instead.
 
@@ -90,8 +123,10 @@ pnpm run migrate
 ```
 
 This writes a new file under [drizzle/](drizzle), the app's migration
-history. `pnpm start` applies whatever's pending here to the production
-database.
+history. The container applies whatever's pending here to the production
+database on start. Dev and test databases never run migrations — they sync
+straight from `schema.ts` — so test a migration that rebuilds a table against
+a copy of the production database before shipping it.
 
 ## Releasing a version
 
@@ -106,18 +141,16 @@ migrations with `git pull && docker compose up --build`.
 
 ## Commands
 
-| Command                                | Does                                                                                                                                                              |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm start`                           | Build and run the app.                                                                                                                                            |
-| `pnpm dev` / `dev-debug` / `dev-trace` | Run the app in development.                                                                                                                                       |
-| `pnpm build`                           | Build the app without starting it.                                                                                                                                |
-| `pnpm run migrate`                     | Generate a database migration from `schema.ts`.                                                                                                                   |
-| `pnpm check`                           | Type-check the project.                                                                                                                                           |
-| `pnpm lint`                            | Check formatting and lint rules.                                                                                                                                  |
-| `pnpm format`                          | Auto-format the codebase.                                                                                                                                         |
-| `pnpm test`                            | Run the test suite.                                                                                                                                               |
-| `pnpm verify`                          | `check` + `lint` + `test` — the full "is this okay" gate.                                                                                                         |
-| `pnpm mcp` / `mcp-dev`                 | Start the MCP server, in production or development mode. Launched by an MCP client (Claude Code, Claude Desktop) once registered — not something you run by hand. |
+| Command                                | Does                                                      |
+| -------------------------------------- | --------------------------------------------------------- |
+| `pnpm dev` / `dev-debug` / `dev-trace` | Run the app in development.                               |
+| `pnpm build`                           | Build the app without starting it.                        |
+| `pnpm run migrate`                     | Generate a database migration from `schema.ts`.           |
+| `pnpm check`                           | Type-check the project.                                   |
+| `pnpm lint`                            | Check formatting and lint rules.                          |
+| `pnpm format`                          | Auto-format the codebase.                                 |
+| `pnpm test`                            | Run the test suite.                                       |
+| `pnpm verify`                          | `check` + `lint` + `test` — the full "is this okay" gate. |
 
 ### Inspecting or resetting the database directly
 
