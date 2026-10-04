@@ -139,6 +139,37 @@ describe('parseMarkdown', () => {
 		]);
 	});
 
+	it('nests a sub-list indented less than the parent marker width instead of splitting the list', () => {
+		expect(parseMarkdown('1. one\n - a\n\n2. two\n - b')).toEqual([
+			{
+				type: 'list',
+				ordered: true,
+				items: [
+					{
+						content: [{ type: 'text', value: 'one' }],
+						children: [
+							{
+								type: 'list',
+								ordered: false,
+								items: [{ content: [{ type: 'text', value: 'a' }], children: [] }]
+							}
+						]
+					},
+					{
+						content: [{ type: 'text', value: 'two' }],
+						children: [
+							{
+								type: 'list',
+								ordered: false,
+								items: [{ content: [{ type: 'text', value: 'b' }], children: [] }]
+							}
+						]
+					}
+				]
+			}
+		]);
+	});
+
 	it('parses blockquotes', () => {
 		expect(parseMarkdown('> quoted')).toEqual([
 			{ type: 'blockquote', children: [{ type: 'text', value: 'quoted' }] }

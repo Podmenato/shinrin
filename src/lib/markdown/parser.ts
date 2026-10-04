@@ -168,10 +168,13 @@ function lineIndent(line: string): number {
 /**
  * Parses a run of list items all indented exactly `indent` columns, starting at line `start`.
  * A blank line between items doesn't end the list — only a line at `indent` that isn't a list
- * item (or a dedent) does. Lines indented further than an item's own marker width are parsed
+ * item (or a dedent) does. A list item indented any amount further than its parent is parsed
  * recursively as a nested list under that item, which is how e.g. `* Example: ...` sub-bullets
  * under a numbered term end up attached to that term instead of spilling out as stray paragraph
- * text. Returns `next`, the index of the first line the list didn't consume, for the caller to
+ * text. This is looser than CommonMark, which requires a sub-list to be indented at least as far
+ * as the parent's content (3 columns under `1. `). Models often indent sub-bullets by a single
+ * space, and the strict rule ends the numbered list there, so every item renders as its own
+ * one-item list that restarts at 1. Returns `next`, the index of the first line the list didn't consume, for the caller to
  * resume from; an empty `items` means line `start` wasn't actually a list item at this indent.
  */
 function parseListBlock(
@@ -195,14 +198,13 @@ function parseListBlock(
 		if (ordered === null) ordered = wantedOrdered;
 		else if (ordered !== wantedOrdered) break;
 
-		const markerWidth = lines[j].slice(indent).length - match[2].length;
 		const content = parseInline(match[2]);
 		i = j + 1;
 
 		const children: BlockNode[] = [];
 		let k = i;
 		while (k < lines.length && lines[k].trim() === '') k++;
-		if (k < lines.length && lineIndent(lines[k]) >= indent + markerWidth) {
+		if (k < lines.length && lineIndent(lines[k]) > indent) {
 			const nested = parseListBlock(lines, k, lineIndent(lines[k]));
 			if (nested.block.items.length > 0) {
 				children.push(nested.block);
