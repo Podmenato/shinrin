@@ -101,6 +101,7 @@ export class OllamaProvider implements ModelProvider {
 
 			let content = '';
 			let toolCalls: ModelResponse['toolCalls'];
+			let truncated = false;
 
 			// for debug logs
 			let promptTokens: number | undefined;
@@ -118,6 +119,8 @@ export class OllamaProvider implements ModelProvider {
 					}));
 				}
 				if (chunk.done) {
+					// 'length': generation hit the num_predict limit — see ModelResponse.truncated.
+					truncated = chunk.done_reason === 'length';
 					promptTokens = chunk.prompt_eval_count;
 					responseTokens = chunk.eval_count;
 				}
@@ -128,7 +131,7 @@ export class OllamaProvider implements ModelProvider {
 				'received streaming chat response'
 			);
 
-			return { content, toolCalls, model };
+			return { content, toolCalls, model, truncated };
 		} finally {
 			signal.removeEventListener('abort', onAbort);
 		}

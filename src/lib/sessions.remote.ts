@@ -33,7 +33,7 @@ async function getSessionMessages(sessionId: string) {
 	const rows = await db.query.messages.findMany({
 		where: { sessionId },
 		orderBy: { createdAt: 'asc' },
-		with: { messageToolCalls: true }
+		with: { messageToolCalls: { orderBy: { position: 'asc' } } }
 	});
 
 	return rows

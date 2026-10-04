@@ -22,6 +22,11 @@ export type ModelResponse = {
 	 * Message.providerContent for why this never gets persisted.
 	 */
 	providerContent?: unknown;
+	/**
+	 * Generation stopped because it hit the provider's output token limit, not because the model
+	 * finished — so any tool call in this response may have incomplete arguments.
+	 */
+	truncated?: boolean;
 };
 
 export interface ModelProvider {

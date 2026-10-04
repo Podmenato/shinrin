@@ -164,6 +164,10 @@ export const messageToolCalls = sqliteTable('message_tool_calls', {
 		.notNull()
 		.references(() => messages.id, { onDelete: 'cascade' }),
 	name: text().notNull(),
+	// The call's index within its assistant message (0, 1, 2…) — the order the model made the calls
+	// in. A rebuilt turn has to list them in that same order every time, or the replayed history
+	// (and the provider's prompt cache) changes.
+	position: integer().notNull(),
 	// The provider's own id for this call, when it assigns one (Anthropic's `toolu_...`), replayed
 	// back to that provider instead of our own `id`. Null for providers that don't assign ids.
 	providerCallId: text('provider_call_id'),

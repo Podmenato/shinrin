@@ -68,7 +68,7 @@ export class ContextManager {
 			.returning();
 
 		if (message.toolCalls) {
-			for (const toolCall of message.toolCalls) {
+			for (const [position, toolCall] of message.toolCalls.entries()) {
 				const [dbTool] = await db
 					.select()
 					.from(toolsTable)
@@ -77,6 +77,7 @@ export class ContextManager {
 					id: toolCall.id,
 					messageId: inserted.id,
 					name: toolCall.name,
+					position,
 					providerCallId: toolCall.providerCallId,
 					toolId: dbTool?.id,
 					args: toolCall.args
@@ -118,7 +119,7 @@ export class ContextManager {
 				? { sessionId: this.sessionId, createdAt: { gt: cutoffMessage.createdAt } }
 				: { sessionId: this.sessionId },
 			orderBy: { createdAt: 'asc' },
-			with: { messageToolCalls: true }
+			with: { messageToolCalls: { orderBy: { position: 'asc' } } }
 		});
 
 		this.history = dbMessages.map((msg) => ({

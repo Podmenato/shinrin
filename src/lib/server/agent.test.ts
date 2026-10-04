@@ -140,6 +140,56 @@ describe('Agent.run', () => {
 		expect(resultRow?.toolCallId).toBe(toolCallRows[0].id);
 	});
 
+	it('ends the run with the partial text of a truncated response, without running its tool calls', async () => {
+		const session = await seedSession();
+		const ctx = new ContextManager('system prompt', session.id);
+		let ran = false;
+		const echo = fakeTool('echo', async () => {
+			ran = true;
+			return 'ok';
+		});
+		const provider = new FakeModelProvider([
+			{
+				content: 'Let me echo',
+				toolCalls: [{ name: 'echo', args: { text: 'cut o' } }],
+				truncated: true
+			}
+		]);
+		const agent = new Agent(session.agentId, provider, 'test-model', ctx, [echo]);
+
+		const result = await agent.run('try', undefined, new AbortController().signal);
+
+		expect(result).toBe('Let me echo');
+		expect(ran).toBe(false);
+		expect(provider.calls).toHaveLength(1);
+
+		// The unrun call still gets a linked result, so the next turn's history is valid.
+		const toolCallRow = await db.query.messageToolCalls.findFirst();
+		const resultRow = await db.query.messages.findFirst({
+			where: { sessionId: session.id, role: 'tool' }
+		});
+		expect(resultRow?.content).toContain('output token limit');
+		expect(resultRow?.toolCallId).toBe(toolCallRow?.id);
+	});
+
+	it('reports a plain Error message as the tool result, not "{}"', async () => {
+		const session = await seedSession();
+		const ctx = new ContextManager('system prompt', session.id);
+		const failing = fakeTool('fail', async () => {
+			throw new Error('ANTHROPIC_API_KEY is not set');
+		});
+		const provider = new FakeModelProvider([
+			{ content: '', toolCalls: [{ name: 'fail', args: {} }] },
+			{ content: 'recovered' }
+		]);
+		const agent = new Agent(session.agentId, provider, 'test-model', ctx, [failing]);
+
+		await agent.run('try', undefined, new AbortController().signal);
+
+		const toolMessage = provider.calls[1].messages.find((m) => m.role === 'tool');
+		expect(toolMessage?.content).toBe('ANTHROPIC_API_KEY is not set');
+	});
+
 	it('retries when the model returns neither content nor tool calls', async () => {
 		const session = await seedSession();
 		const ctx = new ContextManager('system prompt', session.id);

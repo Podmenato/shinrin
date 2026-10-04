@@ -2,7 +2,6 @@ import type { ModelProvider } from './modelProviders/modelProvider';
 import { getModelProvider } from './modelProviders/providerRegistry';
 import { ContextManager, type Message, type ToolCall } from './contextManager';
 import type { Tool } from './tools/tool';
-import { ToolError } from './tools/tool';
 import { logger } from './logger';
 import { db } from './db/index';
 import { sessions } from './db/schema';
@@ -13,6 +12,9 @@ import type { ModelSelection } from '#lib/models.js';
 
 const MAX_ITERATIONS = 20;
 const CANCELLED_MESSAGE = 'Cancelled by user.';
+const TRUNCATED_TOOL_CALL_MESSAGE =
+	'Not run: the reply hit the output token limit before this tool call was complete, so its ' +
+	'arguments may be cut off.';
 
 export class Agent {
 	private provider: ModelProvider;
@@ -32,7 +34,10 @@ export class Agent {
 		this.provider = provider;
 		this.model = model;
 		this.ctx = ctx;
-		this.tools = tools;
+		// Sorted so the tool list sent to the model is identical on every request regardless of the
+		// order the DB returned assignments in — `tools` is the first part of the prompt, so any
+		// reordering would invalidate the provider's whole prompt cache.
+		this.tools = [...tools].sort((a, b) => a.definition.name.localeCompare(b.definition.name));
 	}
 
 	static async create(
@@ -204,7 +209,10 @@ export class Agent {
 					logger.info({ tool: toolCall.name, args: toolCall.args }, 'tool call');
 					const tool = this.tools.find((t) => t.definition.name === toolCall.name);
 					let result;
-					if (tool) {
+					if (response.truncated) {
+						result = TRUNCATED_TOOL_CALL_MESSAGE;
+						logger.warn({ tool: toolCall.name }, 'tool call truncated by output token limit');
+					} else if (tool) {
 						try {
 							result = await tool.execute(toolCall.args, signal);
 							logger.debug({ tool: toolCall.name, result }, 'tool result');
@@ -213,7 +221,9 @@ export class Agent {
 								result = CANCELLED_MESSAGE;
 								logger.info({ tool: toolCall.name }, 'tool cancelled');
 							} else {
-								result = e instanceof ToolError ? e.message : JSON.stringify(e);
+								// Any Error's message, not just ToolError's — JSON.stringify(error) is "{}", which
+								// hid real failures (e.g. a subagent's missing API key) from the model and the logs.
+								result = e instanceof Error ? e.message : String(e);
 								logger.error({ tool: toolCall.name, error: result }, 'tool error');
 							}
 						}
@@ -234,6 +244,14 @@ export class Agent {
 				}
 				if (signal.aborted) {
 					break;
+				}
+
+				// The calls were answered above (so the history stays valid), but not run — end here with
+				// whatever text the reply had, rather than looping into a retry that would likely hit the
+				// same limit.
+				if (response.truncated) {
+					logger.warn('agent run ended: reply hit the output token limit');
+					return response.content;
 				}
 
 				continue;

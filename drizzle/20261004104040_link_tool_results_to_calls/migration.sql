@@ -1,18 +1,28 @@
 -- Links each tool result (`messages` row with role 'tool') to the exact call it answers, and makes
 -- `message_tool_calls` able to record every call the model made, not just built-in tools:
---   - message_tool_calls: + `name` (verbatim, NOT NULL), + `provider_call_id`, `tool_id` nullable
+--   - message_tool_calls: + `name` (verbatim, NOT NULL), + `position` (NOT NULL),
+--     + `provider_call_id`, `tool_id` nullable
 --   - messages: + `tool_call_id` (FK → message_tool_calls.id)
 --
 -- The table rebuild is what `drizzle-kit generate` produced for this diff, with two hand edits:
--- its separate `ALTER TABLE message_tool_calls ADD name text NOT NULL` dropped (SQLite rejects a
--- NOT NULL column with no default, and the rebuild adds the column anyway), and its INSERT ... SELECT
--- filling `name` from `tools` — every existing row has a `tool_id` (it was NOT NULL with an FK until
--- now), so an inner join loses nothing.
+-- its separate `ALTER TABLE message_tool_calls ADD name/position ... NOT NULL` statements dropped
+-- (SQLite rejects a NOT NULL column with no default, and the rebuild adds the columns anyway), and
+-- its INSERT ... SELECT filling the new columns:
+--   - `name` from `tools` — every existing row has a `tool_id` (it was NOT NULL with an FK until
+--     now), so an inner join loses nothing.
+--   - `position` from insertion order within each message: `rowid` is insertion order, which is the
+--     order ContextManager.add() saved the calls in, i.e. the order the model made them. The one
+--     place rowid is relied on — new rows get `position` written explicitly.
+--
+-- The PRAGMA foreign_keys lines drizzle-kit writes around the rebuild are no-ops here (the migrator
+-- runs every migration inside one transaction) — scripts/migrate.js disables foreign keys on the
+-- connection instead; see the note there.
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
 CREATE TABLE `__new_message_tool_calls` (
 	`id` text PRIMARY KEY,
 	`message_id` text NOT NULL,
 	`name` text NOT NULL,
+	`position` integer NOT NULL,
 	`provider_call_id` text,
 	`tool_id` text,
 	`args` text,
@@ -20,11 +30,16 @@ CREATE TABLE `__new_message_tool_calls` (
 	CONSTRAINT `fk_message_tool_calls_tool_id_tools_id_fk` FOREIGN KEY (`tool_id`) REFERENCES `tools`(`id`)
 );
 --> statement-breakpoint
-INSERT INTO `__new_message_tool_calls`(`id`, `message_id`, `name`, `tool_id`, `args`)
-SELECT `message_tool_calls`.`id`, `message_tool_calls`.`message_id`, `tools`.`name`, `message_tool_calls`.`tool_id`, `message_tool_calls`.`args`
+INSERT INTO `__new_message_tool_calls`(`id`, `message_id`, `name`, `position`, `tool_id`, `args`)
+SELECT
+	`message_tool_calls`.`id`,
+	`message_tool_calls`.`message_id`,
+	`tools`.`name`,
+	ROW_NUMBER() OVER (PARTITION BY `message_tool_calls`.`message_id` ORDER BY `message_tool_calls`.`rowid`) - 1,
+	`message_tool_calls`.`tool_id`,
+	`message_tool_calls`.`args`
 FROM `message_tool_calls`
-INNER JOIN `tools` ON `tools`.`id` = `message_tool_calls`.`tool_id`
-ORDER BY `message_tool_calls`.`rowid`;--> statement-breakpoint
+INNER JOIN `tools` ON `tools`.`id` = `message_tool_calls`.`tool_id`;--> statement-breakpoint
 DROP TABLE `message_tool_calls`;--> statement-breakpoint
 ALTER TABLE `__new_message_tool_calls` RENAME TO `message_tool_calls`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
@@ -34,8 +49,8 @@ ALTER TABLE `messages` ADD `tool_call_id` text REFERENCES message_tool_calls(id)
 -- assistant message, its calls, then one `tool` message per executed call, in call order. So a
 -- result's call is: in the nearest assistant message before it (same session), the Nth call with
 -- the same name, where the result is the Nth result with that name after that assistant message.
--- `rowid` is insertion order for both tables (the rebuild above preserves it via ORDER BY), which is
--- also the order agent.run() wrote them in; `createdAt` isn't used because rows written in the same
+-- Calls are ordered by `position` (backfilled above); results by `rowid`, which is insertion order —
+-- the order agent.run() wrote them in. `createdAt` isn't used because rows written in the same
 -- millisecond would tie.
 --
 -- Results with no matching call stay NULL: old subagent results, whose call was never saved
@@ -63,7 +78,7 @@ WITH `tool_results` AS (
 ),
 `ranked_calls` AS (
 	SELECT `id`, `message_id`, `name`,
-		ROW_NUMBER() OVER (PARTITION BY `message_id`, `name` ORDER BY `rowid`) AS `n`
+		ROW_NUMBER() OVER (PARTITION BY `message_id`, `name` ORDER BY `position`) AS `n`
 	FROM `message_tool_calls`
 )
 UPDATE `messages`

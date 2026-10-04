@@ -622,10 +622,9 @@ utf-8` for `text/*` mimetypes — without it, CJK resource text renders as
     across `story_content`) rather than one fixed owner subject.
     `/stories/[storyId]` uses shadcn-svelte `Tabs` (first usage in the app)
     — one tab per subject's content variant, with a `Stale` badge when
-    flagged; the initially-selected tab is a plain `$state(...)` initializer
-    computed once from the already-resolved `story` data, not an `$effect`
-    (see "UI / components" below — this was the case that prompted that
-    rule). Resources render as real links to `/files/[fileId]`,
+    flagged; the initially-selected tab is a writable `$derived` from the
+    already-resolved `story` data, not an `$effect` (see "UI / components"
+    below — this was the case that prompted that rule). Resources render as real links to `/files/[fileId]`,
     `target="_blank"`.
   - Seed data ([seed.ts](src/lib/server/db/seed.ts) `STORY_SEEDS`)
     deliberately includes one cross-subject example (an NHK-style article
@@ -1148,8 +1147,7 @@ verify` — all confirmed clean) is fine with it. Not a config-location/stalenes
   in the picker. `$state(...)` is only fine when the component is
   guaranteed to remount for a new value.
   [stories/[storyId]/+page.svelte](src/routes/stories/[storyId]/+page.svelte)'s
-  `activeSubjectId = $state(...)` still uses the old pattern and likely has
-  the same bug navigating between stories — not yet fixed.
+  `activeSubjectId` had the same bug and uses the same fix.
 - Component library is **shadcn-svelte** (built on `bits-ui`). Installed
   components live in `src/lib/components/ui/*` (e.g. `button`, `card`,
   `sidebar`, `select`, `field`, `empty`, `spinner`, ...). When a screen

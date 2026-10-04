@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "08287370-361b-4d2f-a33b-9e0acdd901bc",
+  "id": "3cdcd488-c446-4864-b5e1-2839f0ea18c1",
   "prevIds": [
     "dfc52dd2-3a92-4589-924e-dec8dd41ec00"
   ],
@@ -365,6 +365,16 @@
       "default": null,
       "generated": null,
       "name": "name",
+      "entityType": "columns",
+      "table": "message_tool_calls"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "position",
       "entityType": "columns",
       "table": "message_tool_calls"
     },

@@ -220,7 +220,8 @@ function toModelResponse(message: Anthropic.Message, requestedModel: string): Mo
 		// Prefer the response's reported model over the requested one where they differ (e.g. an
 		// alias resolving to a dated snapshot).
 		model: message.model ?? requestedModel,
-		providerContent: message.content
+		providerContent: message.content,
+		truncated: message.stop_reason === 'max_tokens'
 	};
 }
 
@@ -284,6 +285,11 @@ export class AnthropicProvider implements ModelProvider {
 				{
 					model,
 					max_tokens: maxTokens,
+					// Caches everything up to the last cacheable block. The agent loop resends the whole
+					// history on every iteration, so within one run each request reads the previous
+					// one's prefix from cache. Any byte change earlier in the request (tools, system
+					// prompt, an earlier turn) misses from that point on.
+					cache_control: { type: 'ephemeral' },
 					system,
 					messages: anthropicMessages,
 					tools: tools.map(toAnthropicTool)
